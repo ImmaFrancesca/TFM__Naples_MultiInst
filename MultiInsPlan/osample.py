@@ -1,0 +1,437 @@
+import copy
+import math
+
+import numpy as np
+import spiceypy as spice
+from spiceypy.utils.support_types import SPICEDOUBLE_CELL
+import random
+import plotly.graph_objects as go
+import warnings
+
+from DataManager import DataManager
+
+
+
+class sample:
+    def __init__(self, n, substart = None, subend = None):
+        self.Ninst = n # number of instruments
+        self.subproblem = [substart, subend]
+        roisL = DataManager.getInstance().getROIList(self.subproblem[0], self.subproblem[1]) # list of list each made of oROI instances, contains the ROIs of each instrument
+        self.stol = [np.zeros(len(roiL)) for roiL in roisL] # list of arrays, each contains the starting instants of
+        #observation for each ROI of the corresponding instrument
+        self.obsLen = [np.zeros(len(roiL)) for roiL in roisL] # list of arrays, each contains the  length of th
+        #observation for each ROI of the corresponding instrument
+        self.qroi = [np.zeros(len(roiL)) for roiL in roisL] # list of arrays, each contains the resolution of the
+        #observation for each ROI of the corresponding instrument
+
+    def getNgoals(self):
+        return 2 # PROBLEM_CHANGE :could be the number of instruments, if for every instrument we have an objective function
+
+    def ranFun(self):
+        n_trials = 0 # number of trials to search for a feasible individual
+        feasible = False
+        while n_trials < 50 and not feasible:
+            n_trials += 1
+            print('n_trials es',n_trials)
+            roisL = DataManager.getInstance().getROIList(self.subproblem[0], self.subproblem[1])
+            ran_instL = random.sample(list(range(len(roisL))), len(roisL))
+            ran_roiL = []
+            for i in ran_instL:
+                ran_indList = random.sample(list(range(len(roisL[i]))), len(roisL[i]))
+                ran_roiL.append(ran_indList)
+            assigned_tws = SPICEDOUBLE_CELL(2000)
+
+            for k, i in enumerate(ran_instL):
+                for j in ran_roiL[k]:
+                    roi = roisL[i][j]
+                    current_tw = roi.ROI_TW
+                    forbidden_tw = spice.wnintd(current_tw, assigned_tws)
+                    new_tw = spice.wndifd(current_tw, forbidden_tw)
+                    feasible = self.checkROI(roi, new_tw)
+                    if feasible:
+                        flag = True
+                        nit = 0
+                        while flag and nit < 20:
+                            _, rr, obsLength, flag = self.uniformRandomInTw(new_tw, roi)
+                            nit += 1
+                        if flag:
+                            print('There will be overlap, or the observation will fall out of the compliant TW')
+                            feasible = False
+                            break
+                        self.stol[i][j] = rr
+                        self.obsLen[i][j] = obsLength
+                        spice.wninsd(rr, rr + obsLength, assigned_tws)
+                    else:
+                        break
+                if not feasible:
+                    break
+        if not feasible:
+            raise Exception('It is not possible to find a random individual')
+
+
+    def uniformRandomInTw(self, tw, roi):
+        nint = spice.wncard(tw)
+        plen = [0] * nint
+        outOfTW = True
+
+        for i in range(nint):
+            intbeg, intend = spice.wnfetd(tw, i)
+            plen[i] = intend - intbeg
+        total = sum(plen)
+        probabilities = [p / total for p in plen]
+        val = list(range(nint))
+        # Select one float randomly with probability proportional to its value
+
+        while outOfTW is True:
+            if val == []:
+                break # in this case, r and obslen are the last obtained. There will be overlap with the observation of
+                # the other rois or the observation falls out of the compilant TW (initial one)
+
+            psel = random.choices(val, weights = probabilities)[0]
+            index = val.index(psel)
+            val.remove(psel)
+            probabilities.remove(probabilities[index])
+
+            i0, i1 = spice.wnfetd(tw, psel)
+            n_it = 0
+            while outOfTW and n_it < 50:
+                n_it += 1
+                rr = random.uniform(i0, i1)
+                obslen = roi.obsmakespan(rr)
+                if rr + obslen <= i1:
+                    outOfTW = False
+        return psel, rr, obslen, outOfTW
+
+    def mutFun(self, f = 0, g = 0):
+
+        roisL = DataManager.getInstance().getROIList(self.subproblem[0], self.subproblem[1])
+        ran_instL = random.sample(list(range(len(roisL))), len(roisL))
+        ran_roiL = []
+        for i in ran_instL:
+            ran_indList = random.sample(list(range(len(roisL[i]))), len(roisL[i]))
+            ran_roiL.append(ran_indList)
+
+        n_inst = 0
+        for k, i in enumerate(ran_instL):
+            otherROIStw = SPICEDOUBLE_CELL(2000)
+            for ind in range(self.Ninst):
+                if ind != i:
+                    for ind_ in range(len(self.stol[ind])):
+                        start = self.stol[ind][ind_]
+                        end = start + self.obsLen[ind][ind_]
+                        spice.wninsd(start, end, otherROIStw)
+            stol = copy.deepcopy(self.stol[i])
+            obsLen = copy.deepcopy(self.obsLen[i])
+            for roi_index, j in enumerate(ran_roiL[k]):
+                roi = roisL[i][j]
+                current_tw = roi.ROI_TW
+                forbidden_tw = spice.wnintd(current_tw, otherROIStw)
+                new_tw = spice.wndifd(current_tw, forbidden_tw)
+                newStart, newLength, flag = self.randomSmallChangeIntw(self.stol[i][j], roi, new_tw, f)
+                if not flag:
+                    self.stol[i][j] = newStart
+                    self.obsLen[i][j] = newLength
+                elif roi_index != 0:
+                    self.stol[i] = copy.deepcopy(stol)
+                    self.obsLen[i] = copy.deepcopy(obsLen)
+                    n_inst += 1
+                    break
+                spice.wninsd(self.stol[i][j], self.stol[i][j] + self.obsLen[i][j], otherROIStw)
+        if n_inst == self.Ninst:
+            print('Mutation has not been performed on the current sample.')
+
+    def randomSmallChangeIntw(self, t0, roi, tw, f):
+        flag = False
+        i, intervals, intervalend = self.findIntervalInTw(t0, tw)
+        if i == -1: # a new random initial instant is chosen within tw
+
+            feasibility = self.checkROI(roi, tw)
+            if not feasibility:
+                return None, None, True
+
+            flag_ = True
+            nit = 0
+            print('Interval not found, a new random initial instant is chosen')
+            while flag_ and nit < 20:
+                _, newBegin, obsLen, flag_ = self.uniformRandomInTw(tw, roi)
+                nit += 1
+            if flag_:
+                print('New random initial instant not found.')
+                flag = True
+            return newBegin, obsLen, flag
+
+        interval = SPICEDOUBLE_CELL(2000)
+        spice.wninsd(intervals, intervalend, interval)
+        feasibility = self.checkROI(roi, interval)
+        if not feasibility:
+            return None, None, True
+        if np.abs(t0 - intervals) >= np.abs(t0 - intervalend):
+            sigma0 = np.abs(intervalend - t0)
+        else:
+            sigma0 = np.abs(intervals - t0)
+        sigma = sigma0
+        ns = 0
+        while True:
+            newBegin = t0 + np.random.normal(0, sigma)
+            if newBegin < 0:
+                #print('newBegin = ', newBegin)
+                newBegin = 0
+            if newBegin > 20:
+                #print('newBegin = ', newBegin)
+                newBegin = 20
+            obslen = roi.obsmakespan(newBegin)
+            newEnd = newBegin + obslen
+            # print('NewEnd ', newEnd)
+            # print('Intervalend', intervalend)
+            if newBegin >= intervals and newEnd <= intervalend:
+                # print('Mutation with sigma = ' + str(sigma) + 's')
+                break
+            ns += 1
+            # print('iteration ', ns)
+            if ns > 50:
+                # print('halving')
+                sigma0 = sigma0 / 2
+                sigma = sigma0
+            if ns > 500:
+                print(t0)
+                print(intervals)
+                print(intervalend)
+                #raise Exception('uhhh cant find mutation')
+                flag = True
+                warnings.warn('Cannot find the mutation for the current ROI.')
+                break
+        return newBegin, obslen, flag
+
+    def findIntervalInTw(self, t, tw):
+        nint = spice.wncard(tw)
+        for i in range(nint):
+            intbeg, intend = spice.wnfetd(tw, i)
+            if intbeg <= t <= intend:
+                return i, intbeg, intend
+        return -1, 0.0, 0.0
+
+    def repFun(self, p1, f1, f2):
+        roisL = DataManager.getInstance().getROIList(self.subproblem[0], self.subproblem[1])
+        feasible = False
+        n_rep = 0
+        while n_rep < 20 and not feasible:
+            n_rep += 1
+            print('n_rep =',n_rep)
+            ran_instL = random.sample(list(range(len(roisL))), len(roisL))
+            ran_roiL = []
+            for i in ran_instL:
+                ran_indList = random.sample(list(range(len(roisL[i]))), len(roisL[i]))
+                ran_roiL.append(ran_indList)
+
+            assigned_tws = SPICEDOUBLE_CELL(2000)
+
+            for k, i in enumerate(ran_instL):
+                for j in ran_roiL[k]:
+                    roi = roisL[i][j]
+                    current_tw = roi.ROI_TW
+                    forbidden_tw = spice.wnintd(current_tw, assigned_tws)
+                    new_tw = spice.wndifd(current_tw, forbidden_tw)
+                    start = (self.stol[i][j] + p1.stol[i][j])/2
+                    a, _, iend = self.findIntervalInTw(start, new_tw)
+                    if a != -1:
+                        obslen = roi.obsmakespan(start)
+                        if start + obslen <= iend:
+                            feasible = True
+                            self.stol[i][j] = start
+                            self.obsLen[i][j] = obslen
+                            spice.wninsd(start, start + obslen, assigned_tws)
+                            continue
+                    if a == -1:
+                        print('Interval not found, a new random initial instant is chosen')
+                    else:
+                        print('Observation length is such that the end is outside the interval. A new random initial instant is chosen.')
+                    feasible = self.checkROI(roi, new_tw)
+                    if feasible:
+                        flag = True
+                        nit = 0
+
+                        while flag and nit < 20:
+                            _, rr, obsLength, flag = self.uniformRandomInTw(new_tw, roi)
+                            nit += 1
+                        if flag:
+                            feasible = False
+                            print('There will be overlap, or the observation will fall out of the compliant TW')
+                            break
+                        self.stol[i][j] = rr
+                        self.obsLen[i][j] = obsLength
+                        spice.wninsd(rr, rr + obsLength, assigned_tws)
+                    else:
+                        break
+                if not feasible:
+                    break
+        if not feasible:
+            raise Exception('Cannot find child individual')
+
+
+    """    
+    def fitFun(self, info = False): # the fitness is the mean value of the two functions to be minimized
+        tov = self.getTotalOverlapTime()
+        tout = self.getTotalOutOfTWTime()
+        if tov + tout > 0:
+            return (tov + tout) * 1e9
+        total_duration = self.evalTotalDuration()
+        coverage = self.evalCov()
+        if info:
+            print('total_duration =', total_duration, 'coverage =', coverage)
+        return np.mean([total_duration, -coverage])
+    """
+    def fitFun(self, info = False): # the fitness is the mean value of the two functions to be minimized
+        tov = self.getTotalOverlapTime()
+        tout = self.getTotalOutOfTWTime()
+        if tov + tout > 0:
+            return [(tov + tout) * 1e9, (tov + tout) / 1e9 ]
+        total_duration = self.evalTotalDuration()
+        coverage = self.evalCov()
+        if info:
+            print('total_duration =', total_duration, 'coverage =', coverage)
+        return [total_duration, -coverage]
+
+    def evalTotalDuration(self):
+        total_duration = 0
+        for instrument in self.obsLen:
+            #total_duration += sum((instrument - 0.9)/(1.86915 - 0.9))
+            total_duration += sum(instrument)
+        return total_duration
+
+    def evalCov(self):
+        cov = []
+        for i in range(self.Ninst):
+            if i == 1 or i == 3:
+                instcov = []
+                for j in range(len(self.obsLen[i])):
+                    instcov.append(self.RoiCov(self.obsLen[i][j], self.stol[i][j]))
+                cov.append(sum(instcov))
+        return sum(cov)
+
+    def RoiCov(self, ObsLen, start):
+        ObsLen_min, ObsLen_max = 0.9, 1.87
+        start_min, start_max = 0, 20
+        cov_min, cov_max = 1000, 6000
+        a = (cov_max - cov_min) / ((ObsLen_max ** 2 - ObsLen_min ** 2) + (start_max ** 2 - start_min ** 2))
+        c = cov_min - a * (ObsLen_min ** 2 + start_min ** 2)  # Termine costante per garantire z_min
+        #cov = ((a * (ObsLen ** 2 + start ** 2) + c) - cov_min)/ (cov_max - cov_min)
+        cov = a * (ObsLen ** 2 + start ** 2) + c
+        return cov
+
+    def getTotalOutOfTWTime(self):
+        roisL = DataManager.getInstance().getROIList(self.subproblem[0], self.subproblem[1])
+        totalout = 0
+        for i, instrument in enumerate(roisL):
+            for j, roi in enumerate(instrument):
+                start = self.stol[i][j]
+                end = start + self.obsLen[i][j]
+                _, _, intervalend = self.findIntervalInTw(start, roi.ROI_TW)
+                if end > intervalend:
+                    totalout += end - intervalend
+        return totalout
+
+    def getTotalOverlapTime(self):
+        all_stol = [roistol for instrument in self.stol for roistol in instrument]
+        all_obsLen = [roiobsLen for instrument in self.obsLen for roiobsLen in instrument]
+        si = sorted(range(len(all_stol)), key=lambda k: all_stol[k])  # ROI sorted by obs time
+        sorted_stol = [all_stol[i] for i in si]
+        isfirst = True
+        toverlap = 0
+
+        for i in range(len(sorted_stol)):
+            if isfirst:
+                isfirst = False
+                continue
+            startt = sorted_stol[i]
+            endprevious = sorted_stol[i - 1] + all_obsLen[si[i - 1]]
+            overlap = 0
+            if endprevious > startt: overlap = endprevious - startt
+            toverlap = toverlap + overlap
+        return toverlap
+
+    def distance(self, other):
+        dd = 0
+        for j in range(self.Ninst):
+            for i in range(len(self.stol[j])):
+                q = math.fabs(other.stol[j][i] - self.stol[j][i])
+                if q > dd: dd = q
+        return q
+
+    def checkROI(self, roi, tw):
+        nint = spice.wncard(tw)
+
+        for i in range(nint):
+            intbeg, intend = spice.wnfetd(tw, i)
+            interval = np.linspace(intbeg, intend, num = 1000)
+            for inst in interval:
+                if inst + roi.obsmakespan(inst) <= intend:
+                    return True
+
+        return False
+
+
+    def checkFeasibility(self):
+        roisL = DataManager.getInstance().getROIList(self.subproblem[0], self.subproblem[1])
+
+        for i, instrument in enumerate(roisL):
+            for roi in instrument:
+                tw = roi.ROI_TW
+                flag = self.checkROI(roi, tw)
+                if not flag:
+                    print('The schedule is not feasible since the observation of the', roi.ROI_name, 'of the instrument',
+                          i + 1, 'is too long')
+                    return False
+
+        return True
+    def plotGantt(self):
+        roisL = DataManager.getInstance().getROIList(self.subproblem[0], self.subproblem[1])
+        fig = go.Figure()
+        for i in range(self.Ninst):
+            for j in range(len(roisL[i])):
+                fig.add_shape(
+                    type="rect",
+                    x0=self.stol[i][j], y0=i - 0.4, x1=self.stol[i][j] + self.obsLen[i][j], y1=i + 0.4,
+                    line=dict(color="black", width=1),
+                    fillcolor="blue"
+                )
+                fig.add_annotation(
+                    x=(self.stol[i][j] + self.stol[i][j] + self.obsLen[i][j]) / 2,
+                    y=i,
+                    text=roisL[i][j].ROI_name,
+                    showarrow=False,
+                    yshift=10
+                )
+
+        fig.add_shape(type="line",
+                      x0=0, x1=0, y0=-1, y1=4,
+                      line=dict(color="red", width=2, dash="dash"))
+        fig.add_shape(type="line",
+                      x0=20, x1=20, y0=-1, y1=4,
+                      line=dict(color="red", width=2, dash="dash"))
+
+        fig.update_layout(
+            xaxis=dict(
+                range=[-0.5, 25],
+                title="Time"
+            ),
+            yaxis=dict(
+                tickmode='array',
+                tickvals=list(range(self.Ninst)),
+                ticktext=[str(i + 1) for i in range(self.Ninst)],
+                title="Instrument"
+            ),
+            shapes=[],
+            hovermode='closest'
+        )
+
+        fig.show()
+
+
+    def getVector(self):
+        return self.obsLen[0], self.stol[0], self.qroi
+
+
+
+
+
+
