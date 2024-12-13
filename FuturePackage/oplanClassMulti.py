@@ -75,7 +75,7 @@ class oplan():
                             _, rr, obsLength, flag = self.uniformRandomInTw(new_tw, roi)
                             nit += 1
                         if flag:
-                            print('There will be overlap, or the observation will fall out of the compliant TW')
+                            # print('ranFun: Random individual not found for this order of instruments and ROIs.')
                             feasible = False
                             break
                         self.stol[i][j] = rr
@@ -176,12 +176,12 @@ class oplan():
 
             flag_ = True
             nit = 0
-            print('Interval not found, a new random initial instant is chosen')
+            #print('Interval not found, a new random initial instant is chosen')
             while flag_ and nit < 20:
                 _, newBegin, obsLen, flag_ = self.uniformRandomInTw(tw, roi)
                 nit += 1
             if flag_:
-                print('New random initial instant not found.')
+            #    print('New random initial instant not found.')
                 flag = True
             return newBegin, obsLen, flag
 
@@ -223,7 +223,7 @@ class oplan():
                 print(intervalend)
                 #raise Exception('uhhh cant find mutation')
                 flag = True
-                warnings.warn('Cannot find the mutation for the current ROI.')
+                #warnings.warn('Cannot find the mutation for the current ROI.')
                 break
         return newBegin, obslen, flag
 
@@ -266,10 +266,10 @@ class oplan():
                             self.obsLen[i][j] = obslen
                             spice.wninsd(start, start + obslen, assigned_tws)
                             continue
-                    if a == -1:
-                        print('Interval not found, a new random initial instant is chosen')
-                    else:
-                        print('Observation length is such that the end is outside the interval. A new random initial instant is chosen.')
+                    #if a == -1:
+                    #   print('repFun: Interval not found, a new random initial instant is chosen')
+                    #else:
+                    #    print('repFun: Observation length is such that the end is outside the interval. A new random initial instant is chosen.')
                     feasible = self.checkROI(roi, new_tw)
                     if feasible:
                         flag = True
@@ -280,7 +280,7 @@ class oplan():
                             nit += 1
                         if flag:
                             feasible = False
-                            print('There will be overlap, or the observation will fall out of the compliant TW')
+                            print('repFun: Random initial instant not found for the given ROI, with this order of instruments and ROIs.')
                             break
                         self.stol[i][j] = rr
                         self.obsLen[i][j] = obsLength
@@ -290,7 +290,8 @@ class oplan():
                 if not feasible:
                     break
         if not feasible:
-            raise Exception('Cannot find child individual')
+            warnings.warn('Cannot find child individual. Parent 1 is kept.')
+            # raise Exception('Cannot find child individual')
 
 
     """    
@@ -444,8 +445,8 @@ class oplan():
                 tw = roi.ROI_TW
                 flag = self.checkROI(roi, tw)
                 if not flag:
-                    print('The schedule is not feasible since the observation of the', roi.ROI_name, 'of the instrument',
-                          i + 1, 'is too long')
+                    print('The schedule is not feasible since the observation of the', roi.name, 'of the instrument',
+                          roi.ROI_InsType, 'is too long')
                     return False
         return True
     def plotGantt(self):
