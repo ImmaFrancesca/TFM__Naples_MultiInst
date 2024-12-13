@@ -1,18 +1,17 @@
+import sys
 from pySPICElib.kernelFetch import kernelFetch
 from pySPICElib.SPICEtools import *
-
 import spiceypy as spice
 from FuturePackage import Instrument
 from FuturePackage import ROIDataBase
 from FuturePackage import DataManager
-from FuturePackage import oplan
+from FuturePackage.oplanClassMulti import oplan
 #from plotSchedule import plotSchedule
 #from plotGanntSchedule import plotGanntSchedule
-#import PMOT as pm
-from MultiInsPlan.ooamaga import amaga
+from genetic.ooamaga import amaga
 import os
 import pickle
-#import cv2
+
 #################################################################################################################
 
 
@@ -278,12 +277,12 @@ instruments = []
 ROIsList = []
 #   b) INSTRUMENT AND OBSERVER INFO
 observer = 'JUICE'  # Single string (only one observer per schedule)
-janus_type = 'CAMERA'
+inst1Type = 'CAMERA'
 ifov = 15e-6  # [rad] single 'double' variable
 npix = 1735  # single 'int' variable
 imageRate = 10  # [ips] single 'int' variable
 fs = 20.  # single 'double' variable
-instrument = Instrument(janus_type, ifov, npix, imageRate, fs)
+instrument = Instrument(inst1Type, ifov, npix, imageRate, fs)
 instruments.append(instrument)
 
 #########################################################################################################
@@ -312,8 +311,8 @@ for name in roinames1:
 ROIsList.append(roiL1)
 
 # SETUP RIME AND ANTIJOVIAN REGIONS
-rime_type = 'RADAR'
-instrument = Instrument(rime_type, ifov, npix, imageRate, fs)
+inst2Type = 'RADAR'
+instrument = Instrument(inst2Type)
 instruments.append(instrument)
 
 DB = ROIDataBase(ROIs_antijovian, target_body)
@@ -344,170 +343,34 @@ ROIsList.append(roiL2)
 
 DataManager(ROIsList, instruments, observer)
 
-np.random.seed(1234)
+#np.random.seed(1234)
 
-plan1 = oplan()
+plan1 = oplan(len(ROIsList))
+feasibility = plan1.checkFeasibility()
+
+if not feasibility:
+    sys.exit()
 plan1.ranFun()
+plan1.plotGantt()
+print('initial fitness = ', plan1.fitFun())
 plan1.mutFun()
+print("mutated individual's fitness = ", plan1.fitFun())
+plan1.plotGantt()
 
-p= 62
-mymaga = amaga(plan1, 100)
-mymaga.setOption('nd', int(mymaga.getPopulationSize() * p/100))
-mymaga.setOption('ne', 10)
-mymaga.setOption('nn', 10)
-mymaga.setOption('nm', int((mymaga.getPopulationSize() * (0.8 - p/100))))
-mymaga.setOption('nCanMutate', 15)
-mymaga.setOption('nCanProcreate', 15)
+plan2 = oplan(len(ROIsList))
+plan2.ranFun()
+plan2.plotGantt()
 
-for q in range(1):
-    print('q=',q)
-    mymaga.evalFitness()
-    mymaga.buildFronts()
-    #mymaga.sortByFronts()
-    mymaga.buildCrowds()
-    mymaga.sortByCrowds()
-    #print('-------------------')
-    #print(mymaga.pop[0].fitFun())
-    #print(mymaga.pop[1].fitFun())
-    mymaga.mutateDegenerates(q)
-    #mymaga.plotPopulation2d().
-    front_size = mymaga.getFrontSize(0)
-    print(f'Front Size: {front_size}')
-    mymaga.evalFitness()
-    mymaga.repopulate(q)
+plan1.repFun(plan2, 0, 0)
+plan1.plotGantt()
 
-mymaga.buildFronts()
-#mymaga.sortByFronts()
-mymaga.buildCrowds()
-mymaga.sortByCrowds()
-mymaga.evalFitness()
-
+mymaga = amaga(plan1,50)
+mymaga.run(2)
+#mymaga.plotPopulation2d()
+#plt.show()
+#myaga.plotSatus2d()
+#plt.show()
+mymaga.printStatus()
+#mymaga.pop[0].plotGantt()
 front_size = mymaga.getFrontSize(0)
-#m2 = mymaga.metricM2(0.5)
-#front_spread = mymaga.frontSpread()
 print(f'Front Size: {front_size}')
-#print(f'M2: {m2}')
-#print(f'Front Spread: {front_spread}')
-
-mymaga.plotSatus2d()
-plt.title('Multi-Instrument Schedule Optimization', fontweight='bold', fontsize = 18)
-plt.xlabel('JANUS Resolution [km/px]', fontweight='bold', fontsize = 15)
-plt.ylabel('RIME Coverage [km2]', fontweight='bold', fontsize = 15)
-plt.xticks(fontsize = 14, rotation = 45)
-plt.yticks(fontsize = 14)
-#plt.xlim([0.4, 1.0])
-#plt.ylim([1e+7, 5e+8])
-plt.grid(True, 'major')
-#plt.plot([], [], 'o', color= 'b', label='Pareto Front', markersize=5.0)
-#plt.legend()
-#plt.savefig(f'same_parameters/paretos/SortByCrowd_BIN_{p}')
-plt.show()
-
-if True:
-    nimages_first = mymaga.pop[0].getNImages(instrument, observer)
-    nimages_last = mymaga.pop[1].getNImages(instrument, observer)
-
-    print(nimages_first)
-    print(nimages_last)
-
-    scan_tw = mymaga.pop[0].computeScanWindow()
-    nint = spice.wncard(scan_tw)
-    time_scan = 0
-    for i in range(nint):
-        intbeg, intend = spice.wnfetd(scan_tw, i)
-        print('scan tw')
-        print(spice.et2utc(intbeg, 'C', 0))
-        print(spice.et2utc(intend, 'C', 0))
-        time_scan = time_scan + (intend - intbeg)
-    print(time_scan)
-    print(mymaga.pop[0].fitFun())
-    for i in range(len(mymaga.pop[0].stol1)):
-        tend = mymaga.pop[0].stol1[i] + mymaga.pop[0].obsLength1[i]
-        print('obs tw')
-        print(spice.et2utc(mymaga.pop[0].stol1[i], 'C', 0))
-        print(spice.et2utc(tend, 'C', 0))
-        print(mymaga.pop[0].obsLength1[i])
-
-    scan_tw = mymaga.pop[1].computeScanWindow()
-    nint = spice.wncard(scan_tw)
-    time_scan = 0
-    for i in range(nint):
-        intbeg, intend = spice.wnfetd(scan_tw, i)
-        print('scan tw')
-        print(spice.et2utc(intbeg, 'C', 0))
-        print(spice.et2utc(intend, 'C', 0))
-        time_scan = time_scan + (intend - intbeg)
-    print(time_scan)
-    print(mymaga.pop[1].fitFun())
-    for i in range(len(mymaga.pop[1].stol1)):
-        tend = mymaga.pop[1].stol1[i] + mymaga.pop[1].obsLength1[i]
-        print('obs tw')
-        print(spice.et2utc(mymaga.pop[1].stol1[i], 'C', 0))
-        print(spice.et2utc(tend, 'C', 0))
-        print(mymaga.pop[1].obsLength1[i])
-#
-#bestI, bestF, type, g = myaga.run(1)
-#flybys = [["2034 JUN 05 18:53:51", "2034 JUN 06 18:53:51"]]
-#            ["2033 NOV 26 18:22:11", "2033 NOV 27 18:22:11"],
-#          ["2034 JAN 14 06:38:51", "2034 JAN 15 06:38:51"],
-#          ["2034 JUN 05 18:53:51", "2034 JUN 06 18:53:51"],
-#          ["2034 JUL 11 19:50:31", "2034 JUL 12 19:50:31"],
-#          ["2034 SEP 07 06:03:51", "2034 SEP 08 06:03:51"],
-#          ["2034 SEP 28 18:48:51", "2034 SEP 29 18:48:51"],
-#          ["2034 NOV 18 09:58:51", "2034 NOV 19 09:58:51"]]
-#for i in range(mymaga.getFrontSize(0)):
-#    plotSchedule(mymaga.pop[i], roiL1, flybys)
-#
-#roinames1.extend(roinames2)
-#print(roinames1)
-#scan_tw = mymaga.pop[0].computeScanWindow()
-#nint = spice.wncard(scan_tw)
-#intervals=[]
-#
-#for i in range(len(mymaga.pop[0].stol1)):
-#    endint = mymaga.pop[0].stol1[i] + mymaga.pop[0].obsLength1[i]
-#    interval = np.array([mymaga.pop[0].stol1[i], endint])
-#    intervals.append(interval)
-#
-#for i in range(nint):
-#    intbeg, intend = spice.wnfetd(scan_tw, i)
-#    interval = np.array([intbeg, intend])
-#    datestart = spice.et2utc(intbeg, 'C', 3)
-#    datefinish = spice.et2utc(intend, 'C', 3)
-#    print(datestart)
-#    print(datefinish)
-#    intervals.append(interval)
-#
-#plotGanntSchedule(intervals, roinames1)
-if False:
-    filename = "C:/Users/PORTATIL/Desktop/MASE/TFM/TFM/Resultados_&_Plots/Callisto_mosaic.jpg"
-    img = cv2.imread(filename, cv2.IMREAD_COLOR)
-    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  # Convert from BGR to RGB format
-
-    # First ind
-    fig, ax = plt.subplots()
-    ax.imshow(img_rgb, extent=[-180, 180, -90, 90])
-    mymaga.pop[0].plotObservations_2(ax, fig)
-    plt.show()
-    fig, ax = plt.subplots()
-    ax.imshow(img_rgb, extent=[-180, 180, -90, 90])
-    mymaga.pop[0].plotObservations_3(ax, fig)
-    plt.show()
-    fig, ax = plt.subplots()
-    ax.imshow(img_rgb, extent=[-180, 180, -90, 90])
-    mymaga.pop[0].plotObservations(ax, fig)
-    plt.show()
-
-    # Second ind
-    fig2, ax2 = plt.subplots()
-    ax2.imshow(img_rgb, extent=[-180, 180, -90, 90])
-    mymaga.pop[1].plotObservations_2(ax2, fig2)
-    plt.show()
-    fig2, ax2 = plt.subplots()
-    ax2.imshow(img_rgb, extent=[-180, 180, -90, 90])
-    mymaga.pop[1].plotObservations_3(ax2, fig2)
-    plt.show()
-    fig2, ax2 = plt.subplots()
-    ax2.imshow(img_rgb, extent=[-180, 180, -90, 90])
-    mymaga.pop[1].plotObservations(ax2, fig2)
-    plt.show()

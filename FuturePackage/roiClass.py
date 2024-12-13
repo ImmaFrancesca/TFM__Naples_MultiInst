@@ -9,6 +9,7 @@ from area_coverage_planning_python.mosaic_algorithms.paper.precomputation_JUICE.
 class oPlanRoi(roi):
     def __init__(self, body, name, vertices):
         super().__init__(body, name, vertices)
+        self.mosaic = None
         self.ROI_InsType = None
         self.ROI_TW = None #[[10, 30], [50, 120]]
         self.ROI_ObsET = None
@@ -19,13 +20,15 @@ class oPlanRoi(roi):
 
 
     def initializeObservationDataBase(self, roitw, instrument=None, observer= None, timeData = None, nImg = None, res = None, mosaic = False):
+        self.mosaic = mosaic
         self.ROI_TW = roitw  # Compliant TW for a ROI within the mission TW, given certain constraints
         self.ROI_ObsET = self.computeObservationET()
         if timeData is None and nImg is None and res is None:
-            timeData, nImg, res = self.computeObservationData(instrument, observer, mosaic)
+            timeData, nImg, res = self.computeObservationData(instrument, observer)
         self.ROI_ObsLen = timeData
         self.ROI_ObsImg = nImg
         self.ROI_ObsRes = res
+
 
     def initializeScanDataBase(self, roitw, instrument=None, observer=None, timeData=None, cov=None, targetRadii = 2634):
         # Ganymede's radius [km] by default
@@ -46,7 +49,7 @@ class oPlanRoi(roi):
             et_list.append(t)
         return et_list
 
-    def computeObservationData(self, instrument, observer, mosaic = False):
+    def computeObservationData(self, instrument, observer):
         tw_ObsLengths = []
         tw_NImgs = []
         tw_res = []
@@ -54,7 +57,7 @@ class oPlanRoi(roi):
             nimg = []
             time = []
             res = []
-            if mosaic:
+            if self.mosaic:
                 time, nimg, res =  mosaicOnlineFrontier(compliantInterval, 'JUICE_JANUS', observer, self, instrument, int + 1)
             else:
                 for i, et in enumerate(compliantInterval):
