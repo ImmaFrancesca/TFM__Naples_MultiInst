@@ -1,18 +1,15 @@
 import copy
 import math
-
 import numpy as np
 import spiceypy as spice
 from spiceypy.utils.support_types import SPICEDOUBLE_CELL
 import random
 import plotly.graph_objects as go
 import warnings
+from FuturePackage import DataManager
+from PSOA import *
 
-from DataManager import DataManager
-
-
-
-class sample:
+class oplan():
     def __init__(self, n, substart = None, subend = None):
         self.Ninst = n # number of instruments
         self.subproblem = [substart, subend]
@@ -25,7 +22,30 @@ class sample:
         #observation for each ROI of the corresponding instrument
 
     def getNgoals(self):
-        return 2 # PROBLEM_CHANGE :could be the number of instruments, if for every instrument we have an objective function
+        return  self.Ninst # PROBLEM_CHANGE :could be the number of instruments, if for every instrument we have an objective function
+
+
+    def getObsLength(self, roi, et):
+        interval, _, _ = self.findIntervalInTw(et, roi.ROI_TW)
+        _, timeobs, _ = roi.interpolateObservationData(et, interval)
+        return timeobs
+
+    def getNImages(self, inst_index, observer):
+        roiL = DataManager.getInstance().getROIList()[inst_index]
+        numimg = 0
+        timeobservation = 0
+        for i, roi in enumerate(roiL):
+            interval, _, _ = self.findIntervalInTw(self.stol[inst_index][i], roi.ROI_TW)
+            nImages, timeobs, res = roi.interpolateObservationData(self.stol[inst_index][i], interval)
+            numimg = numimg + nImages
+            #timeobservation = timeobservation + timeobs
+            #roi_TW = stypes.SPICEDOUBLE_CELL(2000)
+            #tend = self.stol1[i] + self.obsLength1[i]
+            #sp.wninsd(self.stol1[i], tend, roi_TW)
+            #roi.initializeObservationDataBase(roi_TW, instrument, observer)
+            #nImages.append([roi.name, np.mean(roi.ROI_ObsRes), np.sum(roi.ROI_ObsImg)])
+        #return [numimg, timeobservation, res]
+        return numimg
 
     def ranFun(self):
         n_trials = 0 # number of trials to search for a feasible individual
@@ -97,10 +117,15 @@ class sample:
             while outOfTW and n_it < 50:
                 n_it += 1
                 rr = random.uniform(i0, i1)
-                obslen = roi.obsmakespan(rr)
+                obslen = self.getObsLength(roi, rr)
                 if rr + obslen <= i1:
                     outOfTW = False
         return psel, rr, obslen, outOfTW
+
+    def getObsLength(self, roi, et):
+        interval, _, _ = self.findIntervalInTw(et, roi.ROI_TW)
+        _, timeobs, _ = roi.interpolateObservationData(et, interval)
+        return timeobs
 
     def mutFun(self, f = 0, g = 0):
 
@@ -179,7 +204,7 @@ class sample:
             if newBegin > 20:
                 #print('newBegin = ', newBegin)
                 newBegin = 20
-            obslen = roi.obsmakespan(newBegin)
+            obslen = self.getObsLength(roi, newBegin)
             newEnd = newBegin + obslen
             # print('NewEnd ', newEnd)
             # print('Intervalend', intervalend)
@@ -234,7 +259,7 @@ class sample:
                     start = (self.stol[i][j] + p1.stol[i][j])/2
                     a, _, iend = self.findIntervalInTw(start, new_tw)
                     if a != -1:
-                        obslen = roi.obsmakespan(start)
+                        obslen = self.getObsLength(roi, start)
                         if start + obslen <= iend:
                             feasible = True
                             self.stol[i][j] = start
@@ -280,23 +305,64 @@ class sample:
             print('total_duration =', total_duration, 'coverage =', coverage)
         return np.mean([total_duration, -coverage])
     """
-    def fitFun(self, info = False): # the fitness is the mean value of the two functions to be minimized
+    def evalResPlan(self, index):
+        roiL = DataManager.getInstance().getROIList()[index]
+        if roiL[0].mosaic:
+            for i in range(len(self.stol[index])):
+                self.qroi[index][i] = self.evalResRoi(index, i, self.stol[index][i])
+        else:
+            for i in range(len(self.stol[index])):
+                ts = self.stol[index][i]
+                te = ts + self.obsLen[index][i]
+                et = np.linspace(ts, te, 4)
+                qv = []
+                for t in et:
+                    qv.append(self.evalResRoi(index, i, t))
+                self.qroi[index][i] = sum(qv) / len(et)
+        return self.qroi[index]
+
+    def evalResRoi(self, index, i, et):  # returns instantaneous resolution (fitness) of roi (integer)
+        roiL = DataManager.getInstance().getROIList()[index]
+        observer = DataManager.getInstance().getObserver()
+        instrument = DataManager.getInstance().getInstrumentData()[index]
+        #print(i)
+        _, _, res = roiL[i].interpolateObservationData(et)
+        return res  # pointres(instrument.ifov, roiL[i].centroid, et, roiL[i].body, observer)
+
+    def evalCovScan(self):
+        target = 'CALLISTO'
+        radii = spice.bodvrd(target, "RADII", 3)[1][1] # [km]
+        scan_tw = self.computeScanWindow()
+        observer = DataManager.getInstance().getObserver()
+        n = sp.wncard(scan_tw)
+        #print(n)
+        interval_cov = []
+        for i in range(n):
+            tstart, tend = sp.wnfetd(scan_tw, i)
+            #print(f'{i}: start {tstart} and end {tend}')
+            et = np.linspace(tstart, tend, 4)
+            qv = []
+            for t in et:
+                qv.append(radarcover(radii = radii, srfpoint= groundtrack(observer, t, target), t = t, target = target, obs = observer))
+            interval_cov.append(sum(qv) / len(et))
+        #print(sum(interval_cov))
+        return sum(interval_cov)
+
+    def fitFun(self): # the fitness is the mean value of the two functions to be minimized
+        instruments = DataManager.getInstance().getInstrumentData()
         tov = self.getTotalOverlapTime()
         tout = self.getTotalOutOfTWTime()
+        if tout != 0:
+            print('out of TW')
         if tov + tout > 0:
             return [(tov + tout) * 1e9, (tov + tout) / 1e9 ]
-        total_duration = self.evalTotalDuration()
-        coverage = self.evalCov()
-        if info:
-            print('total_duration =', total_duration, 'coverage =', coverage)
-        return [total_duration, -coverage]
-
-    def evalTotalDuration(self):
-        total_duration = 0
-        for instrument in self.obsLen:
-            #total_duration += sum((instrument - 0.9)/(1.86915 - 0.9))
-            total_duration += sum(instrument)
-        return total_duration
+        fitness = []
+        for i, instrument in enumerate(instruments):
+            if instrument.type == 'CAMERA':
+                fitness.append(np.mean(self.evalResPlan(i)))
+            if instrument.type == 'RADAR':
+                fitness.append( -self.evalCovScan())
+        return fitness
 
     def evalCov(self):
         cov = []
@@ -364,7 +430,7 @@ class sample:
             intbeg, intend = spice.wnfetd(tw, i)
             interval = np.linspace(intbeg, intend, num = 1000)
             for inst in interval:
-                if inst + roi.obsmakespan(inst) <= intend:
+                if inst + self.getObsLength(roi, inst) <= intend:
                     return True
 
         return False
@@ -381,7 +447,6 @@ class sample:
                     print('The schedule is not feasible since the observation of the', roi.ROI_name, 'of the instrument',
                           i + 1, 'is too long')
                     return False
-
         return True
     def plotGantt(self):
         roisL = DataManager.getInstance().getROIList(self.subproblem[0], self.subproblem[1])
@@ -397,7 +462,7 @@ class sample:
                 fig.add_annotation(
                     x=(self.stol[i][j] + self.stol[i][j] + self.obsLen[i][j]) / 2,
                     y=i,
-                    text=roisL[i][j].ROI_name,
+                    text=roisL[i][j].name,
                     showarrow=False,
                     yshift=10
                 )
@@ -417,7 +482,7 @@ class sample:
             yaxis=dict(
                 tickmode='array',
                 tickvals=list(range(self.Ninst)),
-                ticktext=[str(i + 1) for i in range(self.Ninst)],
+                ticktext=[i.type for i in DataManager.getInstance().getInstrumentData],
                 title="Instrument"
             ),
             shapes=[],
@@ -428,7 +493,7 @@ class sample:
 
 
     def getVector(self):
-        return self.obsLen[0], self.stol[0], self.qroi
+        return self.obsLen, self.stol, self.qroi
 
 
 
