@@ -310,10 +310,12 @@ for name in roinames1:
                               if obsCov:
                                     rois[j].initializeObservationDataBase(roitw=tw, timeData=obsLen, nImg=obsImg,
                                                                           res=obsRes, cov=obsCov, mosaic=True)
+                                    roiL1.append(rois[j])
                                     continue
                               else:
                                     rois[j].initializeObservationDataBase(roitw=tw, timeData=obsLen, nImg=obsImg,
                                                                           res=obsRes)
+                                    roiL1.append(rois[j])
                                     continue
 ROIsList.append(roiL1)
 
@@ -344,10 +346,12 @@ for name in roinames2:
                               if obsCov:
                                     rois[j].initializeObservationDataBase(roitw=tw, timeData=obsLen, nImg=obsImg,
                                                                           res=obsRes, cov=obsCov, mosaic=True)
+                                    roiL2.append(rois[j])
                                     continue
                               else:
                                     rois[j].initializeObservationDataBase(roitw=tw, timeData=obsLen, nImg=obsImg,
                                                                           res=obsRes)
+                                    roiL2.append(rois[j])
                                     continue
 ROIsList.append(roiL2)
 
