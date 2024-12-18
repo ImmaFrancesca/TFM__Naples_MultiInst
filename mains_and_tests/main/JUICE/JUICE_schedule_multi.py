@@ -16,7 +16,7 @@ import pickle
 
 
 #################################################################################################################
-target_body = "CALLISTO"  # Can be a list of strings or a single string
+target_body = "GANYMEDE"  # Can be a list of strings or a single string
 
 if target_body == "GANYMEDE":
     METAKR = ['https://spiftp.esac.esa.int/data/SPICE/JUICE/kernels/ck/juice_sc_crema_5_1_150lb_23_1_default_v01.bc',
@@ -259,10 +259,8 @@ kf.ffList(urlKernelL=METAKR, forceDownload=False)
 #   a.1) Raw data info
 if target_body == 'GANYMEDE':
     ROIs_filename = "data/roi_info/ganymede_roi_info.txt"  # Can be a list of strings or a single string
-    ROIs_antijovian = "data/roi_info/ganymede_anti_jovian.txt"
 else:
     ROIs_filename = "data/roi_info/callisto_roi_info.txt"  # Can be a list of strings or a single string
-    ROIs_antijovian = "data/roi_info/callisto_anti_jovian.txt"    
 
 #   a.2) Should you want to create a custom ROI omit/add the above and do:
 # customROI = dict()
@@ -276,6 +274,8 @@ desiredROIs = []  # To plan for all the ROIs on the raw datafiles either delete 
 instruments = []
 ROIsList = []
 #   b) INSTRUMENT AND OBSERVER INFO
+
+# INSTRUMENT 1
 observer = 'JUICE'  # Single string (only one observer per schedule)
 inst1Type = 'CAMERA'
 ifov = 15e-6  # [rad] single 'double' variable
@@ -288,36 +288,42 @@ instruments.append(instrument)
 #########################################################################################################
 # SETUP JANUS & ROIS TO BE CAPTURED
 DB = ROIDataBase(ROIs_filename, target_body)
-#roinames1 = ['JUICE_ROI_CAL_4_3_03', 'JUICE_ROI_CAL_4_3_10', 'JUICE_ROI_CAL_4_7_06', 'JUICE_ROI_CAL_6_1_07', 'JUICE_ROI_CAL_6_1_08']#, 'JUICE_ROI_CAL_5_0_04']#, 'JUICE_ROI_CAL_6_1_08']#, 'JUICE_ROI_CAL_4_3_02', 'JUICE_ROI_CAL_4_4_04', 'JUICE_ROI_CAL_4_7_01', 'JUICE_ROI_CAL_6_1_08', 'JUICE_ROI_CAL_5_0_04']
 roinames1 = DB.getnames()  # or rois = [customROI1, customROI2...] List of rois as objects of class oPlanRoi. roiDataBase internally creates each instance of the oPlanRois for each desiredRoi
 rois = DB.getROIs()
 roiL1 = []
+obsCov = False
 for name in roinames1:
     patron = f"pickle_{name}.cfg"
-    for file in os.listdir("data/roi_files_case2"):
+    for file in os.listdir("../../../data/roi_files_case2"):
         if file == patron:
-            with open('data/roi_files_case2/pickle_' + name + '.cfg', "rb") as f:
-                s, e, obsET, obsLen, obsImg, obsRes = pickle.load(f)
-                tw = stypes.SPICEDOUBLE_CELL(2000)
-                for i in range(len(s)):
-                    #print(len(s))
-                    spice.wninsd(s[i], e[i], tw)
-                for j in range(len(rois)):
-                    if rois[j].name == name:
-                        rois[j].ROI_InsType = instrument.type
-                        rois[j].initializeObservationDataBase(roitw=tw, timeData=obsLen, nImg=obsImg, res=obsRes)
-                        roiL1.append(rois[j])
-                        continue
+            with open('../../../data/roi_files_case2/pickle_' + name + '.cfg', "rb") as f:
+                  try:
+                        s, e, obsET, obsLen, obsImg, obsRes, obsCov = pickle.load(f)
+                  except:
+                        s, e, obsET, obsLen, obsImg, obsRes = pickle.load(f)
+                  tw = stypes.SPICEDOUBLE_CELL(2000)
+                  for i in range(len(s)):
+                        spice.wninsd(s[i], e[i], tw)
+                  for j in range(len(rois)):
+                        if rois[j].name == name:
+                              rois[j].ROI_InsType = instrument.type
+                              if obsCov:
+                                    rois[j].initializeObservationDataBase(roitw=tw, timeData=obsLen, nImg=obsImg,
+                                                                          res=obsRes, cov=obsCov, mosaic=True)
+                                    continue
+                              else:
+                                    rois[j].initializeObservationDataBase(roitw=tw, timeData=obsLen, nImg=obsImg,
+                                                                          res=obsRes)
+                                    continue
 ROIsList.append(roiL1)
 
-# SETUP RIME AND ANTIJOVIAN REGIONS
-inst2Type = 'RADAR'
+# Instrument 2
+inst2Type = 'CAMERA'
 instrument = Instrument(inst2Type)
 instruments.append(instrument)
 
-DB = ROIDataBase(ROIs_antijovian, target_body)
-#roinames2 = DB.getnames()  # or rois = [customROI1, customROI2...] List of rois as objects of class oPlanRoi. roiDataBase internally creates each instance of the oPlanRois for each desiredRoi
-roinames2 = ['JUICE_ROI_CAL_J_01']
+DB = ROIDataBase(ROIs_filename, target_body) # ATTENTION: we have to change ROIs_filename if the second camera has different ROIs
+roinames2 = DB.getnames()  # or rois = [customROI1, customROI2...] List of rois as objects of class oPlanRoi. roiDataBase internally creates each instance of the oPlanRois for each desiredRoi
 rois = DB.getROIs()
 roiL2 = []
 for name in roinames2:
@@ -325,20 +331,24 @@ for name in roinames2:
     for file in os.listdir("data/antijovian_files_case2"):
         if file == patron:
             with open('data/antijovian_files_case2/pickle_' + name + '.cfg', "rb") as f:
-                s, e, obsET, obsLen, obsCov = pickle.load(f)
-                #print(len(s))
-                tw = stypes.SPICEDOUBLE_CELL(2000)
-                for i in range(len(s)):
-                    #print(i)
-                    #print(len(s))
-                    spice.wninsd(s[i], e[i], tw)
-                for j in range(len(rois)):
-                    if rois[j].name == name:
-                        rois[j].ROI_InsType = instrument.type
-                        rois[j].initializeScanDataBase(roitw=tw, timeData=obsLen, cov=obsCov)
-                        roiL2.append(rois[j])
-                        #print(len(roiL2))
-                        continue
+                  try:
+                        s, e, obsET, obsLen, obsImg, obsRes, obsCov = pickle.load(f)
+                  except:
+                        s, e, obsET, obsLen, obsImg, obsRes = pickle.load(f)
+                  tw = stypes.SPICEDOUBLE_CELL(2000)
+                  for i in range(len(s)):
+                        spice.wninsd(s[i], e[i], tw)
+                  for j in range(len(rois)):
+                        if rois[j].name == name:
+                              rois[j].ROI_InsType = instrument.type
+                              if obsCov:
+                                    rois[j].initializeObservationDataBase(roitw=tw, timeData=obsLen, nImg=obsImg,
+                                                                          res=obsRes, cov=obsCov, mosaic=True)
+                                    continue
+                              else:
+                                    rois[j].initializeObservationDataBase(roitw=tw, timeData=obsLen, nImg=obsImg,
+                                                                          res=obsRes)
+                                    continue
 ROIsList.append(roiL2)
 
 DataManager(ROIsList, instruments, observer)
