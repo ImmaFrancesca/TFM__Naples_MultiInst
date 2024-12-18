@@ -271,7 +271,7 @@ ifov = 15e-6
 npix = 1735
 imageRate = 10.
 fs = 20.
-instrument = Instrument(ifov, npix, imageRate, fs)
+instrument = Instrument('CAMERA', ifov, npix, imageRate, fs)
 
 DB = ROIDataBase(ROIs_filename, target_body)
 roi = DB.getROIs(roiname)
@@ -331,14 +331,14 @@ for i in range(len(roi)):
         q1 = [f[1], '<', 70.0]
         q2 = [f[2], '<', 75.]
         q = [q0, q1, q2]
-        r = spicetools.myTwFinderList(q, tw, step=120., maxntw=200, nite=20, xtolerance=0.1, ytolerance=0.1)
+        r = spicetools.myTwFinderList(q, tw, step=300., maxntw=200, nite=20, xtolerance=1.0, ytolerance=0.1)
         # print(r)
         for interval in range(spice.wncard(r)):
             start, end = spice.wnfetd(r, interval)
             # print(end - start)
             if end - start >= 10 * 60:
                 tws = spice.wnunid(r, tws)
-    roi[i].initializeObservationDataBase(tws, instrument, observer, mosaic = True)  # FUERA DEL BUCLE?
+    roi[i].initializeObservationDataBase(tws, instrument, observer, mosaic = True)
 
     if roi[i].ROI_ObsET:
         with open(os.path.join('../../../data/roi_files/', 'pickle_' + roi[i].name + '.cfg'), "wb") as f:
@@ -348,7 +348,11 @@ for i in range(len(roi)):
                 begin, end = spice.wnfetd(roi[i].ROI_TW, interval)
                 b.append(begin)
                 e.append(end)
-            pickle.dump([b, e, roi[i].ROI_ObsET, roi[i].ROI_ObsLen, roi[i].ROI_ObsImg, roi[i].ROI_ObsRes], f)
+            if roi[i].mosaic:
+                pickle.dump([b, e, roi[i].ROI_ObsET, roi[i].ROI_ObsLen, roi[i].ROI_ObsImg, roi[i].ROI_ObsRes,
+                             roi[i].ROI_ObsCov], f)
+            else:
+                pickle.dump([b, e, roi[i].ROI_ObsET, roi[i].ROI_ObsLen, roi[i].ROI_ObsImg, roi[i].ROI_ObsRes], f)
             f.close()
 
     for j in range(spice.wncard(roi[i].ROI_TW)):
@@ -361,6 +365,10 @@ for i in range(len(roi)):
                 minRes = min(roi[i].ROI_ObsRes[j])
                 k = np.where(roi[i].ROI_ObsRes[j] == minRes)
                 minET = roi[i].ROI_ObsET[j][k]
+                if roi[i].mosaic:
+                    maxCov = max(roi[i].ROI_ObsCov[j])
+                    h = np.where(roi[i].ROI_ObsCov[j] == maxCov)
+                    maxET = roi[i].ROI_ObsET[j][h]
                 original_stdout = sys.stdout
 
                 stdout_fd = open(outfile, 'w')
@@ -372,11 +380,16 @@ for i in range(len(roi)):
                 print('t =', roi[i].ROI_ObsET[j])
                 print('minRes =', minRes)
                 print('minResTime =', minET)
+                if roi[i].mosaic:
+                    print('Cov(t) =', roi[i].ROI_ObsCov[j])
+                    print('maxCov =', maxCov)
+                    print('maxCovTime =', maxET)
+
                 stdout_fd.flush()
                 stdout_fd.close()
                 sys.stdout = original_stdout
 
     # print(f'roi_{i} done ----------------------------------')
 
-# if os.path.getsize(errorfile) == 0:
-#    os.remove(errorfile)
+    # if os.path.getsize(errorfile) == 0:
+    #    os.remove(errorfile)
