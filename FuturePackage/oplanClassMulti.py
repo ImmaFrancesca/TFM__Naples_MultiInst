@@ -16,18 +16,22 @@ class oplan():
         roisL = DataManager.getInstance().getROIList(self.subproblem[0], self.subproblem[1]) # list of list each made of oROI instances, contains the ROIs of each instrument
         self.stol = [np.zeros(len(roiL)) for roiL in roisL] # list of arrays, each contains the starting instants of
         #observation for each ROI of the corresponding instrument
-        self.obsLen = [np.zeros(len(roiL)) for roiL in roisL] # list of arrays, each contains the  length of th
+        self.obsLen = [np.zeros(len(roiL)) for roiL in roisL] # list of arrays, each contains the  length of the
         #observation for each ROI of the corresponding instrument
         self.qroi = [np.zeros(len(roiL)) for roiL in roisL] # list of arrays, each contains the resolution of the
         #observation for each ROI of the corresponding instrument
+        self.croi = [np.zeros(len(roiL)) for roiL in roisL] # list of arrays, each contains the coverage of the
+        #observation for each ROI of the corresponding instrument (if this is a camera,otherwise it contains an array of 0)
 
     def getNgoals(self):
         return  self.Ninst # PROBLEM_CHANGE :could be the number of instruments, if for every instrument we have an objective function
 
-
     def getObsLength(self, roi, et):
         interval, _, _ = self.findIntervalInTw(et, roi.ROI_TW)
-        _, timeobs, _ = roi.interpolateObservationData(et, interval)
+        if roi.mosaic:
+            _, timeobs, _, _ = roi.interpolateObservationData(et, interval)
+        else:
+            _, timeobs, _ = roi.interpolateObservationData(et, interval)
         return timeobs
 
     def getNImages(self, inst_index, observer):
@@ -36,7 +40,10 @@ class oplan():
         timeobservation = 0
         for i, roi in enumerate(roiL):
             interval, _, _ = self.findIntervalInTw(self.stol[inst_index][i], roi.ROI_TW)
-            nImages, timeobs, res = roi.interpolateObservationData(self.stol[inst_index][i], interval)
+            if roi.mosaic:
+                nImages, timeobs, res, _ = roi.interpolateObservationData(self.stol[inst_index][i], interval)
+            else:
+                nImages, timeobs, res = roi.interpolateObservationData(self.stol[inst_index][i], interval)
             numimg = numimg + nImages
             #timeobservation = timeobservation + timeobs
             #roi_TW = stypes.SPICEDOUBLE_CELL(2000)
@@ -122,13 +129,7 @@ class oplan():
                     outOfTW = False
         return psel, rr, obslen, outOfTW
 
-    def getObsLength(self, roi, et):
-        interval, _, _ = self.findIntervalInTw(et, roi.ROI_TW)
-        _, timeobs, _ = roi.interpolateObservationData(et, interval)
-        return timeobs
-
     def mutFun(self, f = 0, g = 0):
-
         roisL = DataManager.getInstance().getROIList(self.subproblem[0], self.subproblem[1])
         ran_instL = random.sample(list(range(len(roisL))), len(roisL))
         ran_roiL = []
@@ -293,61 +294,43 @@ class oplan():
             warnings.warn('Cannot find child individual. Parent 1 is kept.')
             # raise Exception('Cannot find child individual')
 
-
-    """    
-    def fitFun(self, info = False): # the fitness is the mean value of the two functions to be minimized
-        tov = self.getTotalOverlapTime()
-        tout = self.getTotalOutOfTWTime()
-        if tov + tout > 0:
-            return (tov + tout) * 1e9
-        total_duration = self.evalTotalDuration()
-        coverage = self.evalCov()
-        if info:
-            print('total_duration =', total_duration, 'coverage =', coverage)
-        return np.mean([total_duration, -coverage])
-    """
-    def evalResPlan(self, index):
-        roiL = DataManager.getInstance().getROIList()[index]
+    def evalResPlan(self, index_inst):
+        roiL = DataManager.getInstance().getROIList()[index_inst]
         if roiL[0].mosaic:
-            for i in range(len(self.stol[index])):
-                self.qroi[index][i] = self.evalResRoi(index, i, self.stol[index][i])
+            for i in range(len(self.stol[index_inst])):
+                self.qroi[index_inst][i] = self.evalResRoi(index_inst, i, self.stol[index_inst][i])
         else:
-            for i in range(len(self.stol[index])):
-                ts = self.stol[index][i]
-                te = ts + self.obsLen[index][i]
+            for i in range(len(self.stol[index_inst])):
+                ts = self.stol[index_inst][i]
+                te = ts + self.obsLen[index_inst][i]
                 et = np.linspace(ts, te, 4)
                 qv = []
                 for t in et:
-                    qv.append(self.evalResRoi(index, i, t))
-                self.qroi[index][i] = sum(qv) / len(et)
-        return self.qroi[index]
+                    qv.append(self.evalResRoi(index_inst, i, t))
+                self.qroi[index_inst][i] = sum(qv) / len(et)
+        return self.qroi[index_inst]
 
-    def evalResRoi(self, index, i, et):  # returns instantaneous resolution (fitness) of roi (integer)
-        roiL = DataManager.getInstance().getROIList()[index]
+    def evalResRoi(self, index_inst, index_roi, et):  # returns instantaneous resolution (fitness) of roi (integer)
+        roiL = DataManager.getInstance().getROIList()[index_inst]
         observer = DataManager.getInstance().getObserver()
-        instrument = DataManager.getInstance().getInstrumentData()[index]
+        instrument = DataManager.getInstance().getInstrumentData()[index_inst]
         #print(i)
-        _, _, res = roiL[i].interpolateObservationData(et)
+        if roiL[index_roi].mosaic:
+            _, _, res, _ = roiL[index_roi].interpolateObservationData(et)
+        else:
+            _, _, res = roiL[index_roi].interpolateObservationData(et)
+
         return res  # pointres(instrument.ifov, roiL[i].centroid, et, roiL[i].body, observer)
 
-    def evalCovScan(self):
-        target = 'CALLISTO'
-        radii = spice.bodvrd(target, "RADII", 3)[1][1] # [km]
-        scan_tw = self.computeScanWindow()
-        observer = DataManager.getInstance().getObserver()
-        n = sp.wncard(scan_tw)
-        #print(n)
-        interval_cov = []
-        for i in range(n):
-            tstart, tend = sp.wnfetd(scan_tw, i)
-            #print(f'{i}: start {tstart} and end {tend}')
-            et = np.linspace(tstart, tend, 4)
-            qv = []
-            for t in et:
-                qv.append(radarcover(radii = radii, srfpoint= groundtrack(observer, t, target), t = t, target = target, obs = observer))
-            interval_cov.append(sum(qv) / len(et))
-        #print(sum(interval_cov))
-        return sum(interval_cov)
+    def evalCovPlan(self, index_inst):
+        for i in range(len(self.stol[index_inst])):
+            self.croi[index_inst][i] = self.evalCovRoi(index_inst, i, self.stol[index_inst][i])
+        return self.croi[index_inst]
+
+    def evalCovRoi(self, index_inst, index_roi, et):  # returns instantaneous resolution (fitness) of roi (integer)
+        roiL = DataManager.getInstance().getROIList(self.subproblem[0], self.subproblem[1])[index_inst]
+        _, _, _, cov = roiL[index_roi].interpolateObservationData(et)
+        return cov
 
     def fitFun(self): # the fitness is the mean value of the two functions to be minimized
         instruments = DataManager.getInstance().getInstrumentData()
@@ -355,35 +338,19 @@ class oplan():
         tout = self.getTotalOutOfTWTime()
         if tout != 0:
             print('out of TW')
+        if tov != 0:
+            print('overlap')
         if tov + tout > 0:
-            return [(tov + tout) * 1e9, (tov + tout) / 1e9 ]
+            return [(tov + tout) * 1e9, (tov + tout) * 1e9]
         fitness = []
         for i, instrument in enumerate(instruments):
             if instrument.type == 'CAMERA':
-                fitness.append(np.mean(self.evalResPlan(i)))
-            if instrument.type == 'RADAR':
-                fitness.append( -self.evalCovScan())
+                weights = [0.5, 0.5] # weights needed to evaluate the fitness of EACH camera
+                fitness.append(weights[0] * np.mean(self.evalResPlan(i))
+                             + weights[1] * np.mean(np.ones(len(self.stol[i])) * 100 - self.evalCovPlan(i)))
+            #if instrument.type == 'RADAR':
+            #    fitness.append( -self.evalCovScan())
         return fitness
-
-    def evalCov(self):
-        cov = []
-        for i in range(self.Ninst):
-            if i == 1 or i == 3:
-                instcov = []
-                for j in range(len(self.obsLen[i])):
-                    instcov.append(self.RoiCov(self.obsLen[i][j], self.stol[i][j]))
-                cov.append(sum(instcov))
-        return sum(cov)
-
-    def RoiCov(self, ObsLen, start):
-        ObsLen_min, ObsLen_max = 0.9, 1.87
-        start_min, start_max = 0, 20
-        cov_min, cov_max = 1000, 6000
-        a = (cov_max - cov_min) / ((ObsLen_max ** 2 - ObsLen_min ** 2) + (start_max ** 2 - start_min ** 2))
-        c = cov_min - a * (ObsLen_min ** 2 + start_min ** 2)  # Termine costante per garantire z_min
-        #cov = ((a * (ObsLen ** 2 + start ** 2) + c) - cov_min)/ (cov_max - cov_min)
-        cov = a * (ObsLen ** 2 + start ** 2) + c
-        return cov
 
     def getTotalOutOfTWTime(self):
         roisL = DataManager.getInstance().getROIList(self.subproblem[0], self.subproblem[1])
@@ -489,9 +456,7 @@ class oplan():
             shapes=[],
             hovermode='closest'
         )
-
         fig.show()
-
 
     def getVector(self):
         return self.obsLen, self.stol, self.qroi
