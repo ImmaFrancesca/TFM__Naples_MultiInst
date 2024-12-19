@@ -30,7 +30,7 @@ class amaga(aga):
                 if self.front[i] is not None: # skip  individuals already assigned to a front
                     continue
 
-                if (self.fit[i][0] > 1000) and (self.fit[i][1] > 0): # PROBLEM_CHANGE : if we have different instruments, this must be changed
+                if (self.fit[i][0] > 1000) and (self.fit[i][1] > 1000): # PROBLEM_CHANGE : if we have different instruments, this must be changed
                     continue
 
                 dominant=True
@@ -241,9 +241,9 @@ class amaga(aga):
         return gamma
 
     def printStatus(self):
-        print('sorted=',self.sorted)
+        print('sorted =',self.sorted)
         for i in range(self.getPopulationSize()):
-            print('i=', f'{i:3d}', ':', self.pop[i],' front=',self.front[i],' fit=',end='')
+            print('i =', f'{i:3d}', ':', self.pop[i],' front =',self.front[i],' fit =',end='')
             for g in range(self.sample.getNgoals()):
                 print(f'{self.fit[i,g]}',' ',end='')
             if i>0:
@@ -261,14 +261,14 @@ class amaga(aga):
         front_legend_map = []
 
         for i in range(self.getPopulationSize()):
-            #if self.front[i] > 0:
-            #    continue
-            if self.fit[i][0] > 10:
+            if self.front[i] > 0:
                 continue
+            #if self.fit[i][0] > 10:
+            #   continue
             else:
                 c = front_colors.get(self.front[i], 'k')
 
-            plt.plot(self.pop[i].fitFun()[0], -self.pop[i].fitFun()[1], 'o', color=c, markersize = 5)
+            plt.plot(self.pop[i].fitFun()[0], self.pop[i].fitFun()[1], 'o', color=c, markersize = 5)
             #print(f'self.fit: {self.fit[i]}')
 
         plt.plot([], [], 'o', color= c, label='Pareto Front', markersize=5.0)
@@ -280,7 +280,6 @@ class amaga(aga):
         #plt.xlim([0.4, 1])
         #plt.ylim([1e+7, 5e+8])
 
-        
 
     def plotPopulation2d(self):
         # Use a colormap for gradient colors
@@ -291,8 +290,8 @@ class amaga(aga):
         front_legend_map = []
 
         for i in range(self.getPopulationSize()):
-            #if self.front[i] > 10:
-            #    continue
+            if self.front[i] > 10:
+                continue
             c = front_colors.get(self.front[i], 'k')  # Get color for current front
         
             if self.front[i] not in [patch.get_label().split()[-1] for patch in front_legend_map]:
@@ -300,6 +299,7 @@ class amaga(aga):
                 plt.plot(self.pop[i].getVector()[0], self.pop[i].getVector()[1], 'o', color=c)
             else:
                 plt.plot(self.pop[i].getVector()[0], self.pop[i].getVector()[1], 'o', color=c)
+
 
             #fitness_text = f'{self.fit[i]}'
             #if i < 10:
@@ -332,7 +332,7 @@ class amaga(aga):
         #plt.xticks(npy.arange(-8, 9, 1))
         #plt.yticks(npy.arange(-1, 12, 1))
         #plt.ylim(-1, 11)
-
+        plt.show()
     def run(self, ng=100, sortByCrowding = True):
         print('AGA vanilla run') if self.options['info'] > 0 else None
         g_last = 0

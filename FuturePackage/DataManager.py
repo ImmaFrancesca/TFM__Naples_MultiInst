@@ -36,7 +36,7 @@ class DataManager:
             return [inst[s[i]:e[i]+1] for i,inst in enumerate(self.ROIlist)]
 
     def getMaxMinRes(self):
-        if self.maxRes == None or self.minRes == None:
+        if self.maxRes == [None] * len(self.instrumentsList) or self.minRes == [None] * len(self.instrumentsList):
             for i, instrument in enumerate(self.instrumentsList):
                 if instrument.type == 'CAMERA':
                     min_res = np.inf
@@ -45,7 +45,7 @@ class DataManager:
                         min_res_roi = min(np.concatenate(roi.ROI_ObsRes))
                         max_res_roi = max(np.concatenate(roi.ROI_ObsRes))
                         if min_res_roi < min_res: min_res = copy.deepcopy(min_res_roi)
-                        if max_res_roi < min_res: max_res = copy.deepcopy(max_res_roi)
+                        if max_res_roi > max_res: max_res = copy.deepcopy(max_res_roi)
                     self.maxRes[i] = copy.deepcopy(max_res)
                     self.minRes[i] = copy.deepcopy(min_res)
         else:

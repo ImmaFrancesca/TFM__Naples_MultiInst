@@ -258,9 +258,9 @@ kf.ffList(urlKernelL=METAKR, forceDownload=False)
 #   a) ROI INFO
 #   a.1) Raw data info
 if target_body == 'GANYMEDE':
-    ROIs_filename = "data/roi_info/ganymede_roi_info.txt"  # Can be a list of strings or a single string
+    ROIs_filename = "../../../data/roi_info/ganymede_roi_info.txt"  # Can be a list of strings or a single string
 else:
-    ROIs_filename = "data/roi_info/callisto_roi_info.txt"  # Can be a list of strings or a single string
+    ROIs_filename = "../../../data/roi_info/callisto_roi_info.txt"  # Can be a list of strings or a single string
 
 #   a.2) Should you want to create a custom ROI omit/add the above and do:
 # customROI = dict()
@@ -275,8 +275,9 @@ instruments = []
 ROIsList = []
 #   b) INSTRUMENT AND OBSERVER INFO
 
-# INSTRUMENT 1
+
 observer = 'JUICE'  # Single string (only one observer per schedule)
+# INSTRUMENT 1
 inst1Type = 'CAMERA'
 ifov = 15e-6  # [rad] single 'double' variable
 npix = 1735  # single 'int' variable
@@ -294,9 +295,9 @@ roiL1 = []
 obsCov = False
 for name in roinames1:
     patron = f"pickle_{name}.cfg"
-    for file in os.listdir("../../../data/roi_files_case2"):
+    for file in os.listdir("../../../data/roi_files"):
         if file == patron:
-            with open('../../../data/roi_files_case2/pickle_' + name + '.cfg', "rb") as f:
+            with open('../../../data/roi_files/pickle_' + name + '.cfg', "rb") as f:
                   try:
                         s, e, obsET, obsLen, obsImg, obsRes, obsCov = pickle.load(f)
                   except:
@@ -321,7 +322,11 @@ ROIsList.append(roiL1)
 
 # Instrument 2
 inst2Type = 'CAMERA'
-instrument = Instrument(inst2Type)
+ifov = 15e-6  # [rad] single 'double' variable
+npix = 1735  # single 'int' variable
+imageRate = 10  # [ips] single 'int' variable
+fs = 20.  # single 'double' variable
+instrument = Instrument(inst2Type, ifov, npix, imageRate, fs)
 instruments.append(instrument)
 
 DB = ROIDataBase(ROIs_filename, target_body) # ATTENTION: we have to change ROIs_filename if the second camera has different ROIs
@@ -330,9 +335,9 @@ rois = DB.getROIs()
 roiL2 = []
 for name in roinames2:
     patron = f"pickle_{name}.cfg"
-    for file in os.listdir("data/antijovian_files_case2"):
+    for file in os.listdir("../../../data/roi_files"):
         if file == patron:
-            with open('data/antijovian_files_case2/pickle_' + name + '.cfg', "rb") as f:
+            with open('../../../data/roi_files/pickle_' + name + '.cfg', "rb") as f:
                   try:
                         s, e, obsET, obsLen, obsImg, obsRes, obsCov = pickle.load(f)
                   except:
@@ -364,26 +369,33 @@ feasibility = plan1.checkFeasibility()
 
 if not feasibility:
     sys.exit()
-plan1.ranFun()
-plan1.plotGantt()
-print('initial fitness = ', plan1.fitFun())
-plan1.mutFun()
-print("mutated individual's fitness = ", plan1.fitFun())
-plan1.plotGantt()
 
-plan2 = oplan(len(ROIsList))
-plan2.ranFun()
-plan2.plotGantt()
+#plan1.ranFun()
+#plan1.plotGantt()
+#print('initial fitness = ', plan1.fitFun())
+#plan1.mutFun()
+#print("mutated individual's fitness = ", plan1.fitFun())
+#plan1.plotGantt()
 
-plan1.repFun(plan2, 0, 0)
-plan1.plotGantt()
+mymaga = amaga(plan1,100)
+mymaga.run(20)
 
-mymaga = amaga(plan1,50)
-mymaga.run(2)
-#mymaga.plotPopulation2d()
-#plt.show()
-#myaga.plotSatus2d()
-#plt.show()
+mymaga.plotPopulation2d()
+
+mymaga.plotSatus2d()
+plt.title('Multi-Instrument Schedule Optimization', fontweight='bold', fontsize = 18)
+plt.xlabel('CAMERA 1 Fitness', fontweight='bold', fontsize = 15)
+plt.ylabel('CAMERA 2 Fitness', fontweight='bold', fontsize = 15)
+plt.xticks(fontsize = 14, rotation = 45)
+plt.yticks(fontsize = 14)
+#plt.xlim([0.4, 1.0])
+#plt.ylim([1e+7, 5e+8])
+plt.grid(True, 'major')
+#plt.plot([], [], 'o', color= 'b', label='Pareto Front', markersize=5.0)
+#plt.legend()
+#plt.savefig(f'same_parameters/paretos/SortByCrowd_BIN_{p}')
+plt.show()
+
 mymaga.printStatus()
 #mymaga.pop[0].plotGantt()
 front_size = mymaga.getFrontSize(0)

@@ -7,7 +7,7 @@ import random
 import plotly.graph_objects as go
 import warnings
 from FuturePackage import DataManager
-from PSOA import *
+
 
 class oplan():
     def __init__(self, n, substart = None, subend = None):
@@ -59,11 +59,11 @@ class oplan():
         feasible = False
         while n_trials < 50 and not feasible:
             n_trials += 1
-            print('n_trials es',n_trials)
+            #print('n_trials es',n_trials)
             roisL = DataManager.getInstance().getROIList(self.subproblem[0], self.subproblem[1])
-            ran_instL = random.sample(list(range(len(roisL))), len(roisL))
+            ran_instL = random.sample(list(range(len(roisL))), len(roisL)) # roisL's lists indices are now in casual order
             ran_roiL = []
-            for i in ran_instL:
+            for i in ran_instL: # each list in ran_instL is disordered
                 ran_indList = random.sample(list(range(len(roisL[i]))), len(roisL[i]))
                 ran_roiL.append(ran_indList)
             assigned_tws = SPICEDOUBLE_CELL(2000)
@@ -111,8 +111,7 @@ class oplan():
 
         while outOfTW is True:
             if val == []:
-                break # in this case, r and obslen are the last obtained. There will be overlap with the observation of
-                # the other rois or the observation falls out of the compilant TW (initial one)
+                break # in this case, r and obslen are the last obtained. outOfTW is still True
 
             psel = random.choices(val, weights = probabilities)[0]
             index = val.index(psel)
@@ -136,11 +135,10 @@ class oplan():
         for i in ran_instL:
             ran_indList = random.sample(list(range(len(roisL[i]))), len(roisL[i]))
             ran_roiL.append(ran_indList)
-
-        n_inst = 0
+        n_inst = 0 #number of instruments which are kept unmutated
         for k, i in enumerate(ran_instL):
             otherROIStw = SPICEDOUBLE_CELL(2000)
-            for ind in range(self.Ninst):
+            for ind in range(self.Ninst): #save the actual observation intervals of the other instruments
                 if ind != i:
                     for ind_ in range(len(self.stol[ind])):
                         start = self.stol[ind][ind_]
@@ -154,10 +152,11 @@ class oplan():
                 forbidden_tw = spice.wnintd(current_tw, otherROIStw)
                 new_tw = spice.wndifd(current_tw, forbidden_tw)
                 newStart, newLength, flag = self.randomSmallChangeIntw(self.stol[i][j], roi, new_tw, f)
-                if not flag:
+                if not flag: #mutation for the current ROI is performed
                     self.stol[i][j] = newStart
                     self.obsLen[i][j] = newLength
-                elif roi_index != 0:
+                elif roi_index != 0: #if mutation is not possible for the first ROI of the selected instrument,
+                    # the actual first ROI interval is kept. The following ROIs can still be assigned in a feasible way
                     self.stol[i] = copy.deepcopy(stol)
                     self.obsLen[i] = copy.deepcopy(obsLen)
                     n_inst += 1
@@ -167,14 +166,12 @@ class oplan():
             print('Mutation has not been performed on the current sample.')
 
     def randomSmallChangeIntw(self, t0, roi, tw, f):
-        flag = False
+        flag = False #False if a random small change is possible
         i, intervals, intervalend = self.findIntervalInTw(t0, tw)
         if i == -1: # a new random initial instant is chosen within tw
-
             feasibility = self.checkROI(roi, tw)
             if not feasibility:
                 return None, None, True
-
             flag_ = True
             nit = 0
             #print('Interval not found, a new random initial instant is chosen')
@@ -199,12 +196,12 @@ class oplan():
         ns = 0
         while True:
             newBegin = t0 + np.random.normal(0, sigma)
-            if newBegin < 0:
+            #if newBegin < 0:
                 #print('newBegin = ', newBegin)
-                newBegin = 0
-            if newBegin > 20:
-                #print('newBegin = ', newBegin)
-                newBegin = 20
+            #    newBegin = 0
+            #if newBegin > 20:
+            #    #print('newBegin = ', newBegin)
+            #    newBegin = 20
             obslen = self.getObsLength(roi, newBegin)
             newEnd = newBegin + obslen
             # print('NewEnd ', newEnd)
@@ -219,9 +216,9 @@ class oplan():
                 sigma0 = sigma0 / 2
                 sigma = sigma0
             if ns > 500:
-                print(t0)
-                print(intervals)
-                print(intervalend)
+                #print(t0)
+                #print(intervals)
+                #print(intervalend)
                 #raise Exception('uhhh cant find mutation')
                 flag = True
                 #warnings.warn('Cannot find the mutation for the current ROI.')
@@ -242,7 +239,7 @@ class oplan():
         n_rep = 0
         while n_rep < 20 and not feasible:
             n_rep += 1
-            print('n_rep =',n_rep)
+            #print('n_rep =',n_rep)
             ran_instL = random.sample(list(range(len(roisL))), len(roisL))
             ran_roiL = []
             for i in ran_instL:
@@ -281,7 +278,7 @@ class oplan():
                             nit += 1
                         if flag:
                             feasible = False
-                            print('repFun: Random initial instant not found for the given ROI, with this order of instruments and ROIs.')
+                            #print('repFun: Random initial instant not found for the given ROI, with this order of instruments and ROIs.')
                             break
                         self.stol[i][j] = rr
                         self.obsLen[i][j] = obsLength
@@ -349,7 +346,7 @@ class oplan():
                 min_res = DataManager.getInstance().getMaxMinRes()[1][i]
                 weights = [0.5, 0.5] # weights needed to evaluate the fitness of EACH camera
                 fitness.append(weights[0] * ((np.mean(self.evalResPlan(i)) - min_res) / (max_res - min_res))
-                             + weights[1] * (1. - 1. / 100 * np.mean(self.evalCovPlan(i))))
+                             + weights[1] * (1. - 1 / 100 * np.mean(self.evalCovPlan(i))))
             #if instrument.type == 'RADAR':
             #    fitness.append( -self.evalCovScan())
         return fitness
@@ -438,21 +435,21 @@ class oplan():
                 )
 
         fig.add_shape(type="line",
-                      x0=0, x1=0, y0=-1, y1=4,
+                      x0=spice.str2et('2033 NOV 26 18:22:11'), x1=spice.str2et('2033 NOV 26 18:22:11'), y0=-1, y1=4,
                       line=dict(color="red", width=2, dash="dash"))
         fig.add_shape(type="line",
-                      x0=20, x1=20, y0=-1, y1=4,
+                      x0=spice.str2et('2034 NOV 19 09:58:51'), x1=spice.str2et('2034 NOV 19 09:58:51'), y0=-1, y1=4,
                       line=dict(color="red", width=2, dash="dash"))
 
         fig.update_layout(
             xaxis=dict(
-                range=[-0.5, 25],
+                range=[spice.str2et('2033 NOV 26 18:22:11') - 100, spice.str2et('2034 NOV 19 09:58:51') + 100],
                 title="Time"
             ),
             yaxis=dict(
                 tickmode='array',
                 tickvals=list(range(self.Ninst)),
-                ticktext=[i.type for i in DataManager.getInstance().getInstrumentData],
+                ticktext=[i.type for i in DataManager.getInstance().getInstrumentData()],
                 title="Instrument"
             ),
             shapes=[],
