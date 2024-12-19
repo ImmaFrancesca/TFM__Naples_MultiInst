@@ -1,4 +1,5 @@
 import copy
+import numpy as np
 from sys import getsizeof
 import tracemalloc
 from webbrowser import Error
@@ -22,6 +23,9 @@ class DataManager:
             self.ROIlist = ROIlist
             self.instrumentsList = instrumentsList
             self.observer = observer
+            self.maxRes = [None] * len(self.instrumentsList)
+            self.minRes = [None] * len(self.instrumentsList)
+            self.getMaxMinRes()
             DataManager.__lock = True
         DataManager.__instance = self
 
@@ -30,6 +34,22 @@ class DataManager:
             return self.ROIlist
         else:
             return [inst[s[i]:e[i]+1] for i,inst in enumerate(self.ROIlist)]
+
+    def getMaxMinRes(self):
+        if self.maxRes == None or self.minRes == None:
+            for i, instrument in enumerate(self.instrumentsList):
+                if instrument.type == 'CAMERA':
+                    min_res = np.inf
+                    max_res = -  np.inf
+                    for roi in self.ROIlist[i]:
+                        min_res_roi = min(np.concatenate(roi.ROI_ObsRes))
+                        max_res_roi = max(np.concatenate(roi.ROI_ObsRes))
+                        if min_res_roi < min_res: min_res = copy.deepcopy(min_res_roi)
+                        if max_res_roi < min_res: max_res = copy.deepcopy(max_res_roi)
+                    self.maxRes[i] = copy.deepcopy(max_res)
+                    self.minRes[i] = copy.deepcopy(min_res)
+        else:
+            return self.maxRes, self.minRes
 
     def getSingleROI(self, i, instrument_index = None):
 
