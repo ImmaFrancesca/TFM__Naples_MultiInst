@@ -345,9 +345,17 @@ class oplan():
         fitness = []
         for i, instrument in enumerate(instruments):
             if instrument.type == 'CAMERA':
+                roiL = DataManager.getInstance().getROIList()[i]
+                min_res = np.inf
+                max_res = - np.inf
+                for roi in roiL:
+                    min_res_roi = min(np.concatenate(roi.ROI_ObsRes))
+                    max_res_roi = max(np.concatenate(roi.ROI_ObsRes))
+                    if min_res_roi < min_res: min_res = copy.deepcopy(min_res_roi)
+                    if max_res_roi < min_res: max_res = copy.deepcopy(max_res_roi)
                 weights = [0.5, 0.5] # weights needed to evaluate the fitness of EACH camera
-                fitness.append(weights[0] * np.mean(self.evalResPlan(i))
-                             + weights[1] * np.mean(np.ones(len(self.stol[i])) * 100 - self.evalCovPlan(i)))
+                fitness.append(weights[0] * ((np.mean(self.evalResPlan(i)) - min_res) / (max_res - min_res))
+                             + weights[1] * (1. - 1. / 100 * np.mean(self.evalCovPlan(i))))
             #if instrument.type == 'RADAR':
             #    fitness.append( -self.evalCovScan())
         return fitness
