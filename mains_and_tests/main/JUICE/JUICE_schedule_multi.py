@@ -386,7 +386,7 @@ mymaga.setOption('nm', int((mymaga.getPopulationSize() * (0.8 - p/100))))
 mymaga.setOption('nCanMutate', int(0.15 * mymaga.getPopulationSize()))
 mymaga.setOption('nCanProcreate', int(0.15 * mymaga.getPopulationSize()))
 
-mymaga.run(10)
+mymaga.run(100)
 
 mymaga.plotPopulation2d()
 
