@@ -1,6 +1,11 @@
+import os
+
+import matplotlib
 import numpy as npy
 import copy
 from matplotlib import pyplot as plt
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import Normalize
 from matplotlib.patches import Patch
 from PMOT.ooaga import aga
 
@@ -252,33 +257,40 @@ class amaga(aga):
                 print()
 
     def plotSatus2d(self):
-        #col = {0: 'r', 1: 'y', 2: 'b',3:'m',4:'c',5:'g',6:'k',7:'k',8:'k',9:'k'}
-        #mar = {0: 'o', 1: 'o', 2: 'o', 3:'o', 4:'o', 5:'o', 6:'o', 7:'o', 8:'o', 9:'o'}
+        # col = {0: 'r', 1: 'y', 2: 'b',3:'m',4:'c',5:'g',6:'k',7:'k',8:'k',9:'k'}
+        # mar = {0: 'o', 1: 'o', 2: 'o', 3:'o', 4:'o', 5:'o', 6:'o', 7:'o', 8:'o', 9:'o'}
+        matplotlib.use('Agg')
         cmap = plt.cm.coolwarm
         unique_fronts = sorted(set(self.front))  # Get sorted unique fronts
-        front_colors = {front: cmap(i / len(unique_fronts)) for i, front in enumerate(unique_fronts)}
-        
+        norm = Normalize(vmin=min(unique_fronts), vmax=max(unique_fronts))
+        # front_colors = {front: cmap(i / len(unique_fronts)) for i, front in enumerate(unique_fronts)}
+        fig, ax = plt.subplots()
+        sm = ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+        cbar = plt.colorbar(sm, ax = ax)
+        cbar.set_label("# Pareto Front")  # Etichetta barra colore
+
         front_legend_map = []
 
         for i in range(self.getPopulationSize()):
-            if self.front[i] > 0:
+            if self.front[i] > 10:
                 continue
-            #if self.fit[i][0] > 10:
+            # if self.fit[i][0] > 10:
             #   continue
             else:
-                c = front_colors.get(self.front[i], 'k')
+                # c = front_colors.get(self.front[i], 'k')
+                c = cmap(norm(self.front[i]))
+            plt.plot(self.pop[i].fitFun()[0], self.pop[i].fitFun()[1], 'o', color=c, markersize=5)
+            # print(f'self.fit: {self.fit[i]}')
 
-            plt.plot(self.pop[i].fitFun()[0], self.pop[i].fitFun()[1], 'o', color=c, markersize = 5)
-            #print(f'self.fit: {self.fit[i]}')
-
-        plt.plot([], [], 'o', color= c, label='Pareto Front', markersize=5.0)
-        plt.title('Objective Space', fontweight='bold')  
-        plt.legend()      
-        #plt.legend(handles=front_legend_map, loc='center left', bbox_to_anchor=(1.0, 0.5))
-        #plt.xticks(npy.arange(0, 11, 1))
-        #plt.yticks(npy.arange(0, 11, 1))
-        #plt.xlim([0.4, 1])
-        #plt.ylim([1e+7, 5e+8])
+        # plt.plot([], [], 'o', color = c, label='Pareto Front', markersize=5.0)
+        plt.title('Objective Space', fontweight='bold')
+        # plt.legend()
+        # plt.legend(handles=front_legend_map, loc='center left', bbox_to_anchor=(1.0, 0.5))
+        # plt.xticks(npy.arange(0, 11, 1))
+        # plt.yticks(npy.arange(0, 11, 1))
+        # plt.xlim([0.4, 1])
+        # plt.ylim([1e+7, 5e+8])
 
 
     def plotPopulation2d(self):
@@ -339,10 +351,49 @@ class amaga(aga):
         for g in range(ng):
             print('generation n.',g)
             self.evalFitnessAndSort(sortByCrowding)
+            self.plotSatus2d()
+            plt.title(f'Multi-Instrument Schedule Optimization. Generation {g}', fontweight='bold', fontsize=14)
+            plt.xlabel('CAMERA 1 Fitness', fontweight='bold', fontsize=12)
+            plt.ylabel('CAMERA 2 Fitness', fontweight='bold', fontsize=12)
+            plt.xticks(fontsize=12, rotation=45)
+            plt.yticks(fontsize=12)
+            # plt.xlim([0.4, 1.0])
+            # plt.ylim([1e+7, 5e+8])
+            plt.grid(True, 'major')
+            plt.tight_layout()
+            plt.subplots_adjust(left=0.15, right=0.99, top=0.9, bottom=0.15)
+            # plt.plot([], [], 'o', color= 'b', label='Pareto Front', markersize=5.0)
+            # plt.legend()
+            homeFolder = os.path.expanduser('~')
+            dataFolder = os.path.join(homeFolder, 'ParetoMultiIns')
+            if not os.path.isdir(dataFolder):
+                os.makedirs(dataFolder, exist_ok=True)
+            plt.savefig(f'{dataFolder}/Fronts_{g}')
+            plt.close()
             self.mutateDegenerates(g)
             self.repopulate(g)
             g_last = g + 1
         self.evalFitnessAndSort(sortByCrowding)
+        self.plotSatus2d()
+        plt.title(f'Multi-Instrument Schedule Optimization. Generation {g}', fontweight='bold', fontsize=14)
+        plt.xlabel('CAMERA 1 Fitness', fontweight='bold', fontsize=12)
+        plt.ylabel('CAMERA 2 Fitness', fontweight='bold', fontsize=12)
+        plt.xticks(fontsize=12, rotation=45)
+        plt.yticks(fontsize=12)
+        # plt.xlim([0.4, 1.0])
+        # plt.ylim([1e+7, 5e+8])
+        plt.grid(True, 'major')
+        plt.tight_layout()
+        plt.subplots_adjust(left=0.15, right=0.99, top=0.9, bottom=0.15)
+        # plt.plot([], [], 'o', color= 'b', label='Pareto Front', markersize=5.0)
+        # plt.legend()
+        homeFolder = os.path.expanduser('~')
+        dataFolder = os.path.join(homeFolder, 'ParetoMultiIns')
+        if not os.path.isdir(dataFolder):
+            os.makedirs(dataFolder, exist_ok = True)
+        plt.savefig(f'{dataFolder}/Fronts_{g}')
+        plt.close()
+
 
 
 
