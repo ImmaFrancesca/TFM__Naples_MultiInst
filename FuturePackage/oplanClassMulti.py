@@ -424,7 +424,7 @@ class oplan():
                     type="rect",
                     x0=self.stol[i][j], y0=i - 0.4, x1=self.stol[i][j] + self.obsLen[i][j], y1=i + 0.4,
                     line=dict(color="black", width=1),
-                    fillcolor="blue"
+                    fillcolor="lightskyblue"
                 )
                 fig.add_annotation(
                     x=(self.stol[i][j] + self.stol[i][j] + self.obsLen[i][j]) / 2,
