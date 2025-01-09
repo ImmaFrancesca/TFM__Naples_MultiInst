@@ -378,7 +378,7 @@ if not feasibility:
 #plan1.plotGantt()
 
 p= 62
-mymaga = amaga(plan1, 100)
+mymaga = amaga(plan1, 500)
 mymaga.setOption('nd', int(mymaga.getPopulationSize() * p/100))
 mymaga.setOption('ne', int(0.1 * mymaga.getPopulationSize()))
 #mymaga.setOption('nn', 10)
@@ -386,10 +386,11 @@ mymaga.setOption('nm', int((mymaga.getPopulationSize() * (0.8 - p/100))))
 mymaga.setOption('nCanMutate', int(0.15 * mymaga.getPopulationSize()))
 mymaga.setOption('nCanProcreate', int(0.15 * mymaga.getPopulationSize()))
 
-mymaga.run(100)
+mymaga.run(50)
 
-mymaga.plotPopulation2d()
+#mymaga.plotPopulation2d()
 
+"""
 mymaga.plotSatus2d()
 plt.title('Multi-Instrument Schedule Optimization', fontweight='bold', fontsize = 18)
 plt.xlabel('CAMERA 1 Fitness', fontweight='bold', fontsize = 15)
@@ -403,6 +404,7 @@ plt.grid(True, 'major')
 #plt.legend()
 #plt.savefig(f'same_parameters/paretos/SortByCrowd_BIN_{p}')
 plt.show()
+"""
 
 mymaga.printStatus()
 #mymaga.pop[0].plotGantt()
