@@ -1,4 +1,7 @@
 import sys
+
+import cv2
+import matplotlib
 from pySPICElib.kernelFetch import kernelFetch
 from pySPICElib.SPICEtools import *
 import spiceypy as spice
@@ -11,7 +14,7 @@ from FuturePackage.oplanClassMulti import oplan
 from genetic.ooamaga import amaga
 import os
 import pickle
-
+import os
 #################################################################################################################
 
 
@@ -386,7 +389,42 @@ mymaga.setOption('nm', int((mymaga.getPopulationSize() * (0.8 - p/100))))
 mymaga.setOption('nCanMutate', int(0.15 * mymaga.getPopulationSize()))
 mymaga.setOption('nCanProcreate', int(0.15 * mymaga.getPopulationSize()))
 
-mymaga.run(50)
+mymaga.run(2)
+
+filename = "../../../data/mosaics/Ganymede_mosaic.jpg"
+img = cv2.imread(filename, cv2.IMREAD_COLOR)
+img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+matplotlib.use('TkAgg')
+
+fig1, ax1 = plt.subplots()
+ax1.imshow(img_rgb, extent=[-180, 180, -90, 90])
+mymaga.pop[0].plotObservations(ax1, fig1)
+homeFolder = os.path.expanduser('~')
+dataFolder = os.path.join(homeFolder, 'ParetoMultiIns')
+if not os.path.isdir(dataFolder):
+      os.makedirs(dataFolder, exist_ok=True)
+plt.savefig(f'{dataFolder}/CAMERAS')
+plt.close()
+
+fig2, ax2 = plt.subplots()
+ax2.imshow(img_rgb, extent=[-180, 180, -90, 90])
+mymaga.pop[1].plotObservations_2(ax2, fig2)
+homeFolder = os.path.expanduser('~')
+dataFolder = os.path.join(homeFolder, 'ParetoMultiIns')
+if not os.path.isdir(dataFolder):
+      os.makedirs(dataFolder, exist_ok=True)
+plt.savefig(f'{dataFolder}/CAMERA1')
+plt.close()
+
+fig3, ax3 = plt.subplots()
+ax3.imshow(img_rgb, extent=[-180, 180, -90, 90])
+mymaga.pop[1].plotObservations_3(ax3, fig3)
+homeFolder = os.path.expanduser('~')
+dataFolder = os.path.join(homeFolder, 'ParetoMultiIns')
+if not os.path.isdir(dataFolder):
+      os.makedirs(dataFolder, exist_ok=True)
+plt.savefig(f'{dataFolder}/CAMERA2')
+plt.close()
 
 #mymaga.plotPopulation2d()
 

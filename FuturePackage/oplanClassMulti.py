@@ -7,7 +7,10 @@ import random
 import plotly.graph_objects as go
 import warnings
 from FuturePackage import DataManager
-
+import seaborn as sns
+import matplotlib
+import matplotlib.pyplot as plt
+import PSOA as psoa
 
 class oplan():
     def __init__(self, n, substart = None, subend = None):
@@ -459,6 +462,199 @@ class oplan():
 
     def getVector(self):
         return self.obsLen, self.stol, self.qroi
+
+    def plotObservations(self, ax, fig):
+        matplotlib.use('TkAgg')
+        intervals_camera1 = []
+        intervals_camera2 = []
+        roiL = DataManager.getInstance().getROIList()
+        for i, roi in enumerate(roiL[0]):
+            tend = self.stol[0][i] + self.obsLen[0][i]
+            intervals_camera1.append([roi.name, roi.vertices, self.stol[0][i], tend])
+        for i, roi in enumerate(roiL[1]):
+            tend = self.stol[1][i] + self.obsLen[1][i]
+            intervals_camera2.append([roi.name, roi.vertices, self.stol[1][i], tend])
+        #rois_names = ['JANUS_CAL_4_3_03', 'JANUS_CAL_4_3_10', 'JANUS_CAL_4_7_06', 'JANUS_CAL_6_1_07',
+        #              'JANUS_CAL_6_1_08']
+        cmap1 = sns.color_palette("coolwarm_r", as_cmap=True)
+        colors = [cmap1(i) for i in np.linspace(0, 1, len(intervals_camera1) + 2)]
+        #colors = ['purple', 'white', 'green', 'tab:olive', 'pink']
+        # gtlon, gtlat = groundtrack('JUICE', et, roiL[0].body)
+        tstep = 0.5
+        for i, interval_j in enumerate(intervals_camera1):
+            et = np.arange(interval_j[2], interval_j[3] + tstep, tstep)
+            gtlon, gtlat = psoa.groundtrack('JUICE', et, roiL[0][0].body)
+            for j in range(len(et)):
+                ax.scatter(gtlon[j], gtlat[j], color=colors[i], s=3, marker='s')
+            # found = False
+            # for j, t in enumerate(et):
+            #    if t > interval_j[2] and t <= interval_j[3]:
+            #        found = True
+            #        ax.scatter(gtlon[j], gtlat[j], color=colors[i], s=3)
+
+            # if found:
+            vert_x = [0] * (len(interval_j[1]) + 1)
+            vert_y = [0] * (len(interval_j[1]) + 1)
+            for k in range(len(interval_j[1])):
+                if interval_j[1][k][0] < 0:
+                    vert_x[k] = interval_j[1][k][0] + 180
+                elif interval_j[1][k][0] > 0:
+                    vert_x[k] = interval_j[1][k][0] - 180
+                vert_y[k] = interval_j[1][k][1]
+            vert_x[-1] = vert_x[0]
+            vert_y[-1] = vert_y[0]
+            ax.plot(np.array(vert_x), np.array(vert_y), color=colors[i], linewidth=2, linestyle='--')
+
+        cmap2 = sns.color_palette("cividis", as_cmap=True)
+        colors = [cmap2(i) for i in np.linspace(0, 1, len(intervals_camera2) + 2)]
+        # colors = ['purple', 'white', 'green', 'tab:olive', 'pink']
+        # gtlon, gtlat = groundtrack('JUICE', et, roiL[0].body)
+        tstep = 0.5
+        for i, interval_j in enumerate(intervals_camera2):
+            et = np.arange(interval_j[2], interval_j[3] + tstep, tstep)
+            gtlon, gtlat = psoa.groundtrack('JUICE', et, roiL[1][0].body)
+            for j in range(len(et)):
+                ax.scatter(gtlon[j], gtlat[j], color=colors[i], s=3, marker='s')
+            # found = False
+            # for j, t in enumerate(et):
+            #    if t > interval_j[2] and t <= interval_j[3]:
+            #        found = True
+            #        ax.scatter(gtlon[j], gtlat[j], color=colors[i], s=3)
+
+            # if found:
+            vert_x = [0] * (len(interval_j[1]) + 1)
+            vert_y = [0] * (len(interval_j[1]) + 1)
+            for k in range(len(interval_j[1])):
+                if interval_j[1][k][0] < 0:
+                    vert_x[k] = interval_j[1][k][0] + 180
+                elif interval_j[1][k][0] > 0:
+                    vert_x[k] = interval_j[1][k][0] - 180
+                vert_y[k] = interval_j[1][k][1]
+            vert_x[-1] = vert_x[0]
+            vert_y[-1] = vert_y[0]
+            ax.plot(np.array(vert_x), np.array(vert_y), color=colors[i], linewidth=2, linestyle='--')
+
+        # for j, t in enumerate(et):
+        #    if t > interval_r[0] and t <= interval_r[1]:
+        #        ax.scatter(gtlon[j], gtlat[j], color=colors[-2], s=3)
+
+        #legend = ax.legend(loc='upper center', fontsize=12)
+        #legend.get_frame().set_facecolor('none')
+        #for text in legend.get_texts():
+        #    text.set_color("white")
+        # ax.set_title("Ground track", fontsize=18)
+        ax.set_xlim([-180, 180])
+        ax.set_ylim([-90, 90])
+        # ax.grid(True, which='minor')
+        ax.set_aspect('equal', 'box')
+        ax.set_xlabel(r'Longitude (°)', fontsize=18)
+        ax.set_ylabel(r'Latitude (°)', fontsize=18)
+        plt.xticks(fontsize=14)
+        plt.yticks(fontsize=14)
+
+    def plotObservations_2(self, ax, fig):
+        matplotlib.use('TkAgg')
+        intervals_camera1 = []
+        roiL = DataManager.getInstance().getROIList()
+        for i, roi in enumerate(roiL[0]):
+            tend = self.stol[0][i] + self.obsLen[0][i]
+            intervals_camera1.append([roi.name, roi.vertices, self.stol[0][i], tend])
+        # rois_names = ['JANUS_CAL_4_3_03', 'JANUS_CAL_4_3_10', 'JANUS_CAL_4_7_06', 'JANUS_CAL_6_1_07',
+        #              'JANUS_CAL_6_1_08']
+        cmap1 = sns.color_palette("coolwarm_r", as_cmap=True)
+        colors = [cmap1(i) for i in np.linspace(0, 1, len(intervals_camera1) + 2)]
+        # colors = ['purple', 'white', 'green', 'tab:olive', 'pink']
+        # gtlon, gtlat = groundtrack('JUICE', et, roiL[0].body)
+        tstep = 0.5
+        for i, interval_j in enumerate(intervals_camera1):
+            et = np.arange(interval_j[2], interval_j[3] + tstep, tstep)
+            gtlon, gtlat = psoa.groundtrack('JUICE', et, roiL[0][0].body)
+            for j in range(len(et)):
+                ax.scatter(gtlon[j], gtlat[j], color=colors[i], s=3, marker='s')
+            # found = False
+            # for j, t in enumerate(et):
+            #    if t > interval_j[2] and t <= interval_j[3]:
+            #        found = True
+            #        ax.scatter(gtlon[j], gtlat[j], color=colors[i], s=3)
+
+            # if found:
+            vert_x = [0] * (len(interval_j[1]) + 1)
+            vert_y = [0] * (len(interval_j[1]) + 1)
+            for k in range(len(interval_j[1])):
+                if interval_j[1][k][0] < 0:
+                    vert_x[k] = interval_j[1][k][0] + 180
+                elif interval_j[1][k][0] > 0:
+                    vert_x[k] = interval_j[1][k][0] - 180
+                vert_y[k] = interval_j[1][k][1]
+            vert_x[-1] = vert_x[0]
+            vert_y[-1] = vert_y[0]
+            ax.plot(np.array(vert_x), np.array(vert_y), color=colors[i], linewidth=2, linestyle='--')
+
+        ax.set_xlim([-180, 180])
+        ax.set_ylim([-90, 90])
+        # ax.grid(True, which='minor')
+        ax.set_aspect('equal', 'box')
+        ax.set_xlabel(r'Longitude (°)', fontsize=18)
+        ax.set_ylabel(r'Latitude (°)', fontsize=18)
+        plt.xticks(fontsize=14)
+        plt.yticks(fontsize=14)
+
+    def plotObservations_3(self, ax, fig):
+        matplotlib.use('TkAgg')
+        intervals_camera2 = []
+        roiL = DataManager.getInstance().getROIList()
+        for i, roi in enumerate(roiL[1]):
+            tend = self.stol[1][i] + self.obsLen[1][i]
+            intervals_camera2.append([roi.name, roi.vertices, self.stol[1][i], tend])
+        # rois_names = ['JANUS_CAL_4_3_03', 'JANUS_CAL_4_3_10', 'JANUS_CAL_4_7_06', 'JANUS_CAL_6_1_07',
+        #              'JANUS_CAL_6_1_08']
+        tstep = 0.5
+        cmap2 = sns.color_palette("cividis", as_cmap=True)
+        colors = [cmap2(i) for i in np.linspace(0, 1, len(intervals_camera2) + 2)]
+        # colors = ['purple', 'white', 'green', 'tab:olive', 'pink']
+        # gtlon, gtlat = groundtrack('JUICE', et, roiL[0].body)
+        tstep = 0.5
+        for i, interval_j in enumerate(intervals_camera2):
+            et = np.arange(interval_j[2], interval_j[3] + tstep, tstep)
+            gtlon, gtlat = psoa.groundtrack('JUICE', et, roiL[1][0].body)
+            for j in range(len(et)):
+                ax.scatter(gtlon[j], gtlat[j], color=colors[i], s=3, marker='s')
+            # found = False
+            # for j, t in enumerate(et):
+            #    if t > interval_j[2] and t <= interval_j[3]:
+            #        found = True
+            #        ax.scatter(gtlon[j], gtlat[j], color=colors[i], s=3)
+
+            # if found:
+            vert_x = [0] * (len(interval_j[1]) + 1)
+            vert_y = [0] * (len(interval_j[1]) + 1)
+            for k in range(len(interval_j[1])):
+                if interval_j[1][k][0] < 0:
+                    vert_x[k] = interval_j[1][k][0] + 180
+                elif interval_j[1][k][0] > 0:
+                    vert_x[k] = interval_j[1][k][0] - 180
+                vert_y[k] = interval_j[1][k][1]
+            vert_x[-1] = vert_x[0]
+            vert_y[-1] = vert_y[0]
+            ax.plot(np.array(vert_x), np.array(vert_y), color=colors[i], linewidth=2, linestyle='--')
+
+        # for j, t in enumerate(et):
+        #    if t > interval_r[0] and t <= interval_r[1]:
+        #        ax.scatter(gtlon[j], gtlat[j], color=colors[-2], s=3)
+
+        # legend = ax.legend(loc='upper center', fontsize=12)
+        # legend.get_frame().set_facecolor('none')
+        # for text in legend.get_texts():
+        #    text.set_color("white")
+        # ax.set_title("Ground track", fontsize=18)
+        ax.set_xlim([-180, 180])
+        ax.set_ylim([-90, 90])
+        # ax.grid(True, which='minor')
+        ax.set_aspect('equal', 'box')
+        ax.set_xlabel(r'Longitude (°)', fontsize=18)
+        ax.set_ylabel(r'Latitude (°)', fontsize=18)
+        plt.xticks(fontsize=14)
+        plt.yticks(fontsize=14)
 
 
 
