@@ -57,6 +57,22 @@ class oplan():
         #return [numimg, timeobservation, res]
         return numimg
 
+    def nImgPlan(self, inst_index):
+        roiL = DataManager.getInstance().getROIList()[inst_index]
+        nImgs = []
+        for i in range(len(roiL)):
+            nImgs.append(self.getObsNumImg(roiL[i], self.stol[inst_index][i]))
+        return np.array(nImgs)
+
+    def getObsNumImg(self, roi, et):
+        interval, _, _ = self.findIntervalInTw(et, roi.ROI_TW)
+        if roi.mosaic:
+            nImg, _, _, _ = roi.interpolateObservationData(et, interval)
+        else:
+            nImg, _, _ = roi.interpolateObservationData(et, interval)
+        return nImg
+
+
     def ranFun(self):
         n_trials = 0 # number of trials to search for a feasible individual
         feasible = False

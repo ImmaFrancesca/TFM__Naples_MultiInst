@@ -1,3 +1,4 @@
+import copy
 import sys
 
 import cv2
@@ -15,6 +16,7 @@ from genetic.ooamaga import amaga
 import os
 import pickle
 import os
+import pandas as pd
 #################################################################################################################
 
 
@@ -384,12 +386,12 @@ p= 62
 mymaga = amaga(plan1, 500)
 mymaga.setOption('nd', int(mymaga.getPopulationSize() * p/100))
 mymaga.setOption('ne', int(0.1 * mymaga.getPopulationSize()))
-#mymaga.setOption('nn', 10)
+mymaga.setOption('nn', 500-int(mymaga.getPopulationSize() * p/100)-int(0.1 * mymaga.getPopulationSize())-int((mymaga.getPopulationSize() * (0.8 - p/100))))
 mymaga.setOption('nm', int((mymaga.getPopulationSize() * (0.8 - p/100))))
 mymaga.setOption('nCanMutate', int(0.15 * mymaga.getPopulationSize()))
 mymaga.setOption('nCanProcreate', int(0.15 * mymaga.getPopulationSize()))
 
-mymaga.run(2)
+mymaga.run(300)
 
 filename = "../../../data/mosaics/Ganymede_mosaic.jpg"
 img = cv2.imread(filename, cv2.IMREAD_COLOR)
@@ -408,7 +410,7 @@ plt.close()
 
 fig2, ax2 = plt.subplots()
 ax2.imshow(img_rgb, extent=[-180, 180, -90, 90])
-mymaga.pop[1].plotObservations_2(ax2, fig2)
+mymaga.pop[0].plotObservations_2(ax2, fig2)
 homeFolder = os.path.expanduser('~')
 dataFolder = os.path.join(homeFolder, 'ParetoMultiIns')
 if not os.path.isdir(dataFolder):
@@ -418,7 +420,7 @@ plt.close()
 
 fig3, ax3 = plt.subplots()
 ax3.imshow(img_rgb, extent=[-180, 180, -90, 90])
-mymaga.pop[1].plotObservations_3(ax3, fig3)
+mymaga.pop[0].plotObservations_3(ax3, fig3)
 homeFolder = os.path.expanduser('~')
 dataFolder = os.path.join(homeFolder, 'ParetoMultiIns')
 if not os.path.isdir(dataFolder):
@@ -448,3 +450,152 @@ mymaga.printStatus()
 #mymaga.pop[0].plotGantt()
 front_size = mymaga.getFrontSize(0)
 print(f'Front Size: {front_size}')
+
+
+ind1 = copy.deepcopy(mymaga.pop[0])
+ind2 = copy.deepcopy(mymaga.pop[1])
+roisL = DataManager.getInstance().getROIList()
+
+print('FIRST INDIVIDUAL')
+for inst_index in range(ind1.Ninst):
+      schedule = []
+      nImgInst = ind1.nImgPlan(inst_index)
+      if inst_index == 0:
+            instrument = 'CAMERA 1'
+      else:
+            instrument = 'CAMERA 2'
+
+      for roi_index in range(len(roisL[inst_index])):
+            observation = {
+                  'instrument': instrument,
+                  'ROI': roisL[inst_index][roi_index].name,
+                  'start': ind1.stol[inst_index][roi_index],
+                  'end': None,
+                  'obsLen': ind1.obsLen[inst_index][roi_index],
+                  'nImg': nImgInst[roi_index],
+                  'res': ind1.qroi[inst_index][roi_index],
+                  'cov': ind1.croi[inst_index][roi_index]
+            }
+            schedule.append(copy.deepcopy(observation))
+      schedule = sorted(schedule, key=lambda d: d['start'])
+      for i in range(len(schedule)):
+            schedule[i]['end'] = spice.et2utc(schedule[i]['start'] + schedule[i]['obsLen'], 'C', 0)
+            schedule[i]['start'] = spice.et2utc(schedule[i]['start'], 'C', 0)
+
+      df = pd.DataFrame(schedule)
+
+      # Salvataggio del DataFrame in un file CSV
+      df.to_excel(f'sample1_{inst_index}.xlsx', index=False)
+
+      print('INSTRUMENT:', instrument)
+      for i in range(len(schedule)):
+          start = schedule[i]['start']
+          end = schedule[i]['end']
+          print('ROI: ', schedule[i]['ROI'],'from: ', start, 'to', end, 'nImg:', schedule[i]['nImg'],
+                'res:',schedule[i]['res'],'cov:', schedule[i]['cov'])
+      print('Mean resolution: ', np.mean(ind1.qroi[inst_index]))
+      print('Mean coverage: ', np.mean(ind1.croi[inst_index]))
+
+print('SECOND INDIVIDUAL')
+for inst_index in range(ind2.Ninst):
+      schedule = []
+      nImgInst = ind2.nImgPlan(inst_index)
+      if inst_index == 0:
+            instrument = 'CAMERA 1'
+      else:
+            instrument = 'CAMERA 2'
+
+      for roi_index in range(len(roisL[inst_index])):
+            observation = {
+                  'instrument': instrument,
+                  'ROI': roisL[inst_index][roi_index].name,
+                  'start': ind2.stol[inst_index][roi_index],
+                  'end': None,
+                  'obsLen': ind2.obsLen[inst_index][roi_index],
+                  'nImg': nImgInst[roi_index],
+                  'res': ind2.qroi[inst_index][roi_index],
+                  'cov': ind2.croi[inst_index][roi_index]
+            }
+            schedule.append(copy.deepcopy(observation))
+      schedule = sorted(schedule, key=lambda d: d['start'])
+      for i in range(len(schedule)):
+            schedule[i]['end'] = spice.et2utc(schedule[i]['start'] + schedule[i]['obsLen'], 'C', 0)
+            schedule[i]['start'] = spice.et2utc(schedule[i]['start'], 'C', 0)
+      # Creazione del DataFrame
+      df = pd.DataFrame(schedule)
+
+      # Salvataggio del DataFrame in un file CSV
+      df.to_excel(f'sample2_{inst_index}.xlsx', index=False)
+      print('INSTRUMENT:', instrument)
+      for i in range(len(schedule)):
+          start = schedule[i]['start']
+          end = schedule[i]['end']
+          print('ROI: ', schedule[i]['ROI'],'from: ', start, 'to', end, 'nImg:', schedule[i]['nImg'],
+                'res:',schedule[i]['res'],'cov:', schedule[i]['cov'])
+      print('Mean resolution: ', np.mean(ind2.qroi[inst_index]))
+      print('Mean coverage: ', np.mean(ind2.croi[inst_index]))
+
+
+print('FIRST INDIVIDUAL')
+schedule = []
+for inst_index in range(ind1.Ninst):
+
+      nImgInst = ind1.nImgPlan(inst_index)
+      if inst_index == 0:
+            instrument = 'CAMERA 1'
+      else:
+            instrument = 'CAMERA 2'
+
+      for roi_index in range(len(roisL[inst_index])):
+            observation = {
+                  'instrument': instrument,
+                  'ROI': roisL[inst_index][roi_index].name,
+                  'start': ind1.stol[inst_index][roi_index],
+                  'end': None,
+                  'obsLen': ind1.obsLen[inst_index][roi_index],
+                  'nImg': nImgInst[roi_index],
+                  'res': ind1.qroi[inst_index][roi_index],
+                  'cov': ind1.croi[inst_index][roi_index]
+            }
+            schedule.append(copy.deepcopy(observation))
+schedule = sorted(schedule, key=lambda d: d['start'])
+for i in range(len(schedule)):
+      schedule[i]['end'] = spice.et2utc(schedule[i]['start'] + schedule[i]['obsLen'], 'C', 0)
+      schedule[i]['start'] = spice.et2utc(schedule[i]['start'], 'C', 0)
+
+df = pd.DataFrame(schedule)
+
+# Salvataggio del DataFrame in un file CSV
+df.to_excel(f'sample1.xlsx', index=False)
+
+print('SECOND INDIVIDUAL')
+schedule = []
+for inst_index in range(ind2.Ninst):
+
+      nImgInst = ind2.nImgPlan(inst_index)
+      if inst_index == 0:
+            instrument = 'CAMERA 1'
+      else:
+            instrument = 'CAMERA 2'
+
+      for roi_index in range(len(roisL[inst_index])):
+            observation = {
+                  'instrument': instrument,
+                  'ROI': roisL[inst_index][roi_index].name,
+                  'start': ind2.stol[inst_index][roi_index],
+                  'end': None,
+                  'obsLen': ind2.obsLen[inst_index][roi_index],
+                  'nImg': nImgInst[roi_index],
+                  'res': ind2.qroi[inst_index][roi_index],
+                  'cov': ind2.croi[inst_index][roi_index]
+            }
+            schedule.append(copy.deepcopy(observation))
+schedule = sorted(schedule, key=lambda d: d['start'])
+for i in range(len(schedule)):
+      schedule[i]['end'] = spice.et2utc(schedule[i]['start'] + schedule[i]['obsLen'], 'C', 0)
+      schedule[i]['start'] = spice.et2utc(schedule[i]['start'], 'C', 0)
+
+df = pd.DataFrame(schedule)
+
+# Salvataggio del DataFrame in un file CSV
+df.to_excel(f'sample2.xlsx', index=False)
