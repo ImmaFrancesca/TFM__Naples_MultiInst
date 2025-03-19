@@ -400,6 +400,8 @@ class amaga(aga):
         plt.ylabel('CAMERA 2 Fitness', fontweight='bold', fontsize=12)
         plt.xticks(fontsize=12, rotation=45)
         plt.yticks(fontsize=12)
+        plt.xlim([npy.min(self.fit)-0.05, npy.max(self.fit)+0.05])
+        plt.ylim([npy.min(self.fit)-0.05, npy.max(self.fit)+0.05])
         plt.grid(True, 'major')
         plt.tight_layout()
         plt.subplots_adjust(left=0.15, right=0.99, top=0.9, bottom=0.20)
@@ -411,8 +413,6 @@ class amaga(aga):
             os.makedirs(dataFolder, exist_ok=True)
         plt.savefig(f'{dataFolder}/Fronts_{g}_zoom')
         plt.close()
-
-
 
 
 
